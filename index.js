@@ -1,5 +1,6 @@
 import { Boom } from '@hapi/boom';
-import makeWASocket, {
+import {
+  default as makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
