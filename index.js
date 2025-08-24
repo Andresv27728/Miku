@@ -1,5 +1,6 @@
 import { Boom } from '@hapi/boom';
-import makeWASocket, {
+// Usaremos una importación de 'namespace' para más robustez.
+import Baileys, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -17,12 +18,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- LOGGER ---
+// El logger ahora está en 'info' para dar más detalles en la consola.
 const logger = pino({ level: 'info' });
 
 // --- COLECCIÓN DE COMANDOS ---
 const commands = new Map();
 
-// --- FUNCIÓN PARA CARGAR COMANDOS ---
+// --- FUNCIÓN PARA CARGAR COMANDOS (sin cambios) ---
 async function loadCommands() {
   const pluginsDir = path.join(__dirname, 'plugins');
   try {
@@ -44,13 +46,15 @@ async function loadCommands() {
   }
 }
 
-// --- FUNCIÓN PRINCIPAL DE CONEXIÓN ---
+// --- LÓGICA DE CONEXIÓN REESCRITA ---
 async function connectToWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
   const { version, isLatest } = await fetchLatestBaileysVersion();
   console.log(`Usando Baileys v${version.join('.')}, ¿es la última versión?: ${isLatest}`);
 
-  const sock = makeWASocket({
+  // La clave del cambio: usamos Baileys.default, que es la forma más segura
+  // de acceder al export principal en entornos mixtos de módulos.
+  const sock = Baileys.default({
     version,
     auth: {
       creds: state.creds,
@@ -61,7 +65,7 @@ async function connectToWhatsApp() {
     browser: ['JulesBot', 'Chrome', '1.0.0'],
   });
 
-  // --- MANEJO DE EVENTOS DE CONEXIÓN ---
+  // El resto del manejo de eventos permanece igual.
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect } = update;
     if (connection === 'close') {
@@ -76,10 +80,9 @@ async function connectToWhatsApp() {
     }
   });
 
-  // --- GUARDAR CREDENCIALES ---
   sock.ev.on('creds.update', saveCreds);
 
-  // --- MANEJO DE MENSAJES ---
+  // --- MANEJO DE MENSAJES (sin cambios) ---
   sock.ev.on('messages.upsert', async (m) => {
     const msg = m.messages[0];
     if (!msg.message || msg.key.fromMe) return;
@@ -95,7 +98,6 @@ async function connectToWhatsApp() {
     const commandName = body.trim().split(/ +/)[0].toLowerCase();
     const command = commands.get(commandName);
 
-    // --- EJECUCIÓN DE COMANDOS DE TEXTO ---
     if (command) {
       try {
         await command.execute({ sock, msg, args, commands, config });
@@ -105,26 +107,22 @@ async function connectToWhatsApp() {
       }
     }
 
-    // --- MANEJO DE RESPUESTAS DE BOTONES (PARA EL COMANDO PLAY) ---
     if (messageType === 'buttonsResponseMessage') {
       const [action, type, url] = body.split('_');
-
-      if (action === 'descargar') {
+      if (action === 'descargar' && url) {
         const apiUrl = type === 'audio' ? `${config.api.ytmp3}?url=${url}` : `${config.api.ytmp4}?url=${url}`;
         await sock.sendMessage(from, { text: `Procesando tu solicitud de ${type}...` }, { quoted: msg });
-
         try {
-            const response = await axios.get(apiUrl, { responseType: 'json' });
-            const downloadUrl = response.data.resultado.url;
-
-            if (type === 'audio') {
-                await sock.sendMessage(from, { audio: { url: downloadUrl }, mimetype: 'audio/mpeg' }, { quoted: msg });
-            } else {
-                await sock.sendMessage(from, { video: { url: downloadUrl }, mimetype: 'video/mp4' }, { quoted: msg });
-            }
+          const response = await axios.get(apiUrl, { responseType: 'json' });
+          const downloadUrl = response.data.resultado.url;
+          if (type === 'audio') {
+            await sock.sendMessage(from, { audio: { url: downloadUrl }, mimetype: 'audio/mpeg' }, { quoted: msg });
+          } else {
+            await sock.sendMessage(from, { video: { url: downloadUrl }, mimetype: 'video/mp4' }, { quoted: msg });
+          }
         } catch (error) {
-            console.error("Error al descargar:", error);
-            await sock.sendMessage(from, { text: `No se pudo procesar la descarga desde la API.` }, { quoted: msg });
+          console.error("Error al descargar:", error);
+          await sock.sendMessage(from, { text: `No se pudo procesar la descarga desde la API.` }, { quoted: msg });
         }
       }
     }
