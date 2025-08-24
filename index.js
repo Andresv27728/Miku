@@ -7,6 +7,7 @@ import Baileys, {
   DisconnectReason,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
+import qrcode from 'qrcode-terminal';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -60,14 +61,18 @@ async function connectToWhatsApp() {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    printQRInTerminal: true,
+    // Se elimina printQRInTerminal, ya que está obsoleto.
     logger,
     browser: ['JulesBot', 'Chrome', '1.0.0'],
   });
 
-  // El resto del manejo de eventos permanece igual.
+  // Manejo de conexión actualizado para mostrar el QR manualmente.
   sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
+    const { connection, lastDisconnect, qr } = update;
+    if(qr) {
+      console.log('Escanea este código QR con tu teléfono:');
+      qrcode.generate(qr, { small: true });
+    }
     if (connection === 'close') {
       const shouldReconnect = (lastDisconnect.error instanceof Boom) &&
         lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut;
