@@ -1,6 +1,5 @@
 import { Boom } from '@hapi/boom';
-import {
-  default as makeWASocket,
+import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
@@ -18,7 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- LOGGER ---
-const logger = pino({ level: 'silent' }).child({ level: 'silent' });
+const logger = pino({ level: 'info' });
 
 // --- COLECCIÓN DE COMANDOS ---
 const commands = new Map();

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Bot de WhatsApp con sistema de plugins usando Baileys.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
