@@ -19,8 +19,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- LOGGER ---
-// El logger ahora está en 'info' para dar más detalles en la consola.
-const logger = pino({ level: 'info' });
+// El logger se establece en 'warn' para una consola más limpia.
+const logger = pino({ level: 'warn' });
 
 // --- COLECCIÓN DE COMANDOS ---
 const commands = new Map();
@@ -81,7 +81,9 @@ async function connectToWhatsApp() {
         connectToWhatsApp();
       }
     } else if (connection === 'open') {
-      console.log('Conexión abierta. ¡Bot en línea!');
+      console.log('\n================================================');
+      console.log('            BOT CONECTADO EXITOSAMENTE');
+      console.log('================================================\n');
     }
   });
 
