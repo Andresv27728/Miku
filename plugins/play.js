@@ -26,20 +26,29 @@ const playCommand = {
       const videoUrl = video.url;
       const caption = `*${video.title}*\n\n*Autor:* ${video.author.name}\n*Duración:* ${video.timestamp}\n*Vistas:* ${video.views.toLocaleString()}`;
 
-      const buttons = [
-        { buttonId: `descargar_audio_${videoUrl}`, buttonText: { displayText: '🎵 Audio' }, type: 1 },
-        { buttonId: `descargar_video_${videoUrl}`, buttonText: { displayText: '🎬 Video' }, type: 1 }
+      // La nueva forma de enviar botones es usando "templateMessage".
+      const templateButtons = [
+        { index: 1, quickReplyButton: { displayText: '🎵 Audio', id: `descargar_audio_${videoUrl}` } },
+        { index: 2, quickReplyButton: { displayText: '🎬 Video', id: `descargar_video_${videoUrl}` } }
       ];
 
-      const buttonMessage = {
-        image: { url: video.thumbnail },
-        caption: caption,
+      const templateMessage = {
+        text: caption,
         footer: 'Elige una opción para descargar',
-        buttons: buttons,
-        headerType: 4
+        templateButtons: templateButtons,
+        // Para mostrar la imagen, la adjuntamos como un contexto externo.
+        contextInfo: {
+          externalAdReply: {
+            title: video.title,
+            body: video.author.name,
+            thumbnailUrl: video.thumbnail,
+            mediaType: 1, // 1 for image
+            sourceUrl: video.url
+          }
+        }
       };
 
-      await sock.sendMessage(msg.key.remoteJid, buttonMessage, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, templateMessage, { quoted: msg });
 
     } catch (error) {
       console.error("Error en el comando play:", error);

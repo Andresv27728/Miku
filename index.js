@@ -98,7 +98,7 @@ async function connectToWhatsApp() {
     const messageType = Object.keys(msg.message)[0];
     const body = (messageType === 'conversation') ? msg.message.conversation :
                  (messageType === 'extendedTextMessage') ? msg.message.extendedTextMessage.text :
-                 (messageType === 'buttonsResponseMessage') ? msg.message.buttonsResponseMessage.selectedButtonId :
+                 (messageType === 'templateButtonReplyMessage') ? msg.message.templateButtonReplyMessage.selectedId :
                  (messageType === 'listResponseMessage') ? msg.message.listResponseMessage.singleSelectReply.selectedRowId : '';
 
     const args = body.trim().split(/ +/).slice(1);
@@ -114,7 +114,7 @@ async function connectToWhatsApp() {
       }
     }
 
-    if (messageType === 'buttonsResponseMessage') {
+    if (messageType === 'templateButtonReplyMessage') {
       const parts = body.split('_');
       const action = parts[0];
       if (action === 'descargar') {
