@@ -13,27 +13,35 @@ const playCommand = {
     }
 
     const query = args.join(' ');
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando y preparando audio para "${query}"...` }, { quoted: msg });
+    let waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando "${query}"...` }, { quoted: msg });
 
     try {
       const searchResult = await yts(query);
       const video = searchResult.videos[0];
 
       if (!video) {
-        await sock.sendMessage(msg.key.remoteJid, { text: "No se encontraron resultados para tu búsqueda." }, { quoted: msg });
+        await sock.sendMessage(msg.key.remoteJid, { text: "No se encontraron resultados para tu búsqueda." }, { edit: waitingMsg.key });
         return;
       }
 
       const videoUrl = video.url;
-      const caption = `*${video.title}*\n*Autor:* ${video.author.name}`;
 
-      // Enviar un mensaje de que se está procesando
-      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando audio...` }, { quoted: msg });
+      // Mensaje mejorado
+      await sock.sendMessage(msg.key.remoteJid, { text: `Procesando audio... (Esto puede tardar hasta 90 segundos)` }, { edit: waitingMsg.key });
 
-      // Llamar a la API de descarga de audio
+      // Llamar a la API con timeout
       const apiUrl = `${config.api.ytmp3}?url=${videoUrl}`;
-      const response = await axios.get(apiUrl, { responseType: 'json' });
+      const response = await axios.get(apiUrl, {
+        responseType: 'json',
+        timeout: 90000 // 90 segundos de timeout
+      });
       const downloadUrl = response.data.resultado.url;
+
+      if (!downloadUrl) {
+        throw new Error("La API no devolvió una URL de descarga válida.");
+      }
+
+      await sock.sendMessage(msg.key.remoteJid, { text: `Enviando audio a WhatsApp...` }, { quoted: msg });
 
       // Enviar el archivo de audio
       await sock.sendMessage(
@@ -41,7 +49,6 @@ const playCommand = {
         {
           audio: { url: downloadUrl },
           mimetype: 'audio/mpeg',
-          // Añadimos el caption al audio
           contextInfo: {
             externalAdReply: {
               title: video.title,
@@ -56,12 +63,14 @@ const playCommand = {
         { quoted: msg }
       );
 
-      // Editar el mensaje de espera original (opcional, pero da buen feedback)
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Audio enviado: ${video.title}`, edit: waitingMsg.key });
-
     } catch (error) {
-      console.error("Error en el comando play:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: "Ocurrió un error al procesar tu solicitud de audio." }, { quoted: msg });
+      console.error("Error en el comando play:", error.message);
+      // Manejo de error específico para timeout
+      if (error.code === 'ECONNABORTED') {
+        await sock.sendMessage(msg.key.remoteJid, { text: "El servidor de descargas tardó demasiado en responder. Por favor, intenta de nuevo más tarde." }, { quoted: msg });
+      } else {
+        await sock.sendMessage(msg.key.remoteJid, { text: "Ocurrió un error al procesar tu solicitud de audio. La API podría estar fallando." }, { quoted: msg });
+      }
     }
   }
 };
