@@ -129,6 +129,17 @@ async function connectToWhatsApp() {
     const msg = m.messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
+    // --- Lógica de Bloqueo ---
+    const senderJid = msg.key.participant || msg.key.remoteJid;
+    const blockedDbPath = path.resolve('./database/blocked.json');
+    try {
+      const data = fs.readFileSync(blockedDbPath, 'utf8');
+      const blockedUsers = JSON.parse(data);
+      if (blockedUsers.includes(senderJid)) {
+        return console.log(`Mensaje ignorado de usuario bloqueado: ${senderJid}`);
+      }
+    } catch (e) { /* Ignorar si el archivo no existe */ }
+
     const from = msg.key.remoteJid;
     const messageType = Object.keys(msg.message)[0];
     const body = (messageType === 'conversation') ? msg.message.conversation :
