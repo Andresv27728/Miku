@@ -1,19 +1,19 @@
 import yts from 'yt-search';
+import axios from 'axios';
 
 const playCommand = {
   name: "play",
   category: "descargas",
-  description: "Busca una canción en YouTube y prepara la descarga.",
+  description: "Busca y descarga una canción en formato de audio (MP3).",
 
-  // La función execute ahora acepta 'playContext'
-  async execute({ sock, msg, args, playContext }) {
+  async execute({ sock, msg, args, config }) {
     if (args.length === 0) {
       await sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de una canción. Ejemplo: `play Bella Ciao`" }, { quoted: msg });
       return;
     }
 
     const query = args.join(' ');
-    await sock.sendMessage(msg.key.remoteJid, { text: `Buscando "${query}"...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando y preparando audio para "${query}"...` }, { quoted: msg });
 
     try {
       const searchResult = await yts(query);
@@ -25,15 +25,23 @@ const playCommand = {
       }
 
       const videoUrl = video.url;
-      // Se construye el mensaje con las nuevas instrucciones.
-      const caption = `*${video.title}*\n\n*Autor:* ${video.author.name}\n*Duración:* ${video.timestamp}\n\n---\n*Responde a este mensaje con:*\n*1* - para descargar en Audio 🎵\n*2* - para descargar en Video 🎬`;
+      const caption = `*${video.title}*\n*Autor:* ${video.author.name}`;
 
-      // Se envía el mensaje de texto.
-      const sentMsg = await sock.sendMessage(
+      // Enviar un mensaje de que se está procesando
+      await sock.sendMessage(msg.key.remoteJid, { text: `Descargando audio...` }, { quoted: msg });
+
+      // Llamar a la API de descarga de audio
+      const apiUrl = `${config.api.ytmp3}?url=${videoUrl}`;
+      const response = await axios.get(apiUrl, { responseType: 'json' });
+      const downloadUrl = response.data.resultado.url;
+
+      // Enviar el archivo de audio
+      await sock.sendMessage(
         msg.key.remoteJid,
         {
-          text: caption,
-          // Se añade una vista previa del enlace para que se vea la miniatura.
+          audio: { url: downloadUrl },
+          mimetype: 'audio/mpeg',
+          // Añadimos el caption al audio
           contextInfo: {
             externalAdReply: {
               title: video.title,
@@ -48,20 +56,12 @@ const playCommand = {
         { quoted: msg }
       );
 
-      // Se guarda el ID del mensaje y la URL en el contexto para la respuesta.
-      playContext.set(sentMsg.key.id, videoUrl);
-
-      // Se añade un temporizador para limpiar el contexto si el usuario no responde.
-      setTimeout(() => {
-        if (playContext.has(sentMsg.key.id)) {
-          playContext.delete(sentMsg.key.id);
-          console.log(`Contexto de play para el mensaje ${sentMsg.key.id} eliminado por tiempo de espera.`);
-        }
-      }, 300000); // 5 minutos de tiempo de espera
+      // Editar el mensaje de espera original (opcional, pero da buen feedback)
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Audio enviado: ${video.title}`, edit: waitingMsg.key });
 
     } catch (error) {
       console.error("Error en el comando play:", error);
-      await sock.sendMessage(msg.key.remoteJid, { text: "Ocurrió un error al buscar el video." }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: "Ocurrió un error al procesar tu solicitud de audio." }, { quoted: msg });
     }
   }
 };

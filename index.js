@@ -22,9 +22,8 @@ const __dirname = path.dirname(__filename);
 // El logger se establece en 'warn' para una consola más limpia.
 const logger = pino({ level: 'warn' });
 
-// --- COLECCIÓN DE COMANDOS Y CONTEXTO ---
+// --- COLECCIÓN DE COMANDOS ---
 const commands = new Map();
-const playContext = new Map();
 
 // --- FUNCIÓN PARA CARGAR COMANDOS (sin cambios) ---
 async function loadCommands() {
@@ -109,47 +108,11 @@ async function connectToWhatsApp() {
     // --- Lógica de Comandos ---
     if (command) {
       try {
-        // Pasamos el contexto de play a los comandos
-        await command.execute({ sock, msg, args, commands, config, playContext });
+        // El contexto de play ya no es necesario
+        await command.execute({ sock, msg, args, commands, config });
       } catch (error) {
         console.error(`Error al ejecutar el comando ${commandName}:`, error);
         await sock.sendMessage(from, { text: 'Ocurrió un error al intentar ejecutar ese comando.' }, { quoted: msg });
-      }
-      return; // Evita que se procese como una respuesta de play si es un comando
-    }
-
-    // --- Lógica de Respuestas para el comando Play ---
-    const quotedMsgId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-    if (quotedMsgId && playContext.has(quotedMsgId)) {
-      const url = playContext.get(quotedMsgId);
-      const choice = body.trim();
-      let type;
-
-      if (choice === '1') {
-        type = 'audio';
-      } else if (choice === '2') {
-        type = 'video';
-      } else {
-        return; // No es una respuesta válida para play
-      }
-
-      await sock.sendMessage(from, { text: `Procesando tu solicitud de ${type}...` }, { quoted: msg });
-      try {
-        const apiUrl = type === 'audio' ? `${config.api.ytmp3}?url=${url}` : `${config.api.ytmp4}?url=${url}`;
-        const response = await axios.get(apiUrl, { responseType: 'json' });
-        const downloadUrl = response.data.resultado.url;
-
-        if (type === 'audio') {
-          await sock.sendMessage(from, { audio: { url: downloadUrl }, mimetype: 'audio/mpeg' }, { quoted: msg });
-        } else {
-          await sock.sendMessage(from, { video: { url: downloadUrl }, mimetype: 'video/mp4' }, { quoted: msg });
-        }
-      } catch (error) {
-        console.error("Error al descargar:", error);
-        await sock.sendMessage(from, { text: `No se pudo procesar la descarga desde la API.` }, { quoted: msg });
-      } finally {
-        // Limpiamos el contexto una vez usado
-        playContext.delete(quotedMsgId);
       }
     }
   });
