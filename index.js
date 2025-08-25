@@ -25,6 +25,11 @@ const logger = pino({ level: 'warn' });
 // --- COLECCIÓN DE COMANDOS Y CACHÉ ---
 const commands = new Map();
 const testCache = new Map();
+const cooldowns = new Map();
+
+// --- CONFIGURACIÓN DE TIEMPOS ---
+const COOLDOWN_SECONDS = 5;
+const RESPONSE_DELAY_MS = 2000;
 
 // --- FUNCIÓN PARA CARGAR COMANDOS (sin cambios) ---
 async function loadCommands() {
@@ -153,9 +158,28 @@ async function connectToWhatsApp() {
 
     // --- Lógica de Comandos ---
     if (command) {
+      // --- Lógica de Cooldown ---
+      if (cooldowns.has(senderJid)) {
+        const lastCommandTime = cooldowns.get(senderJid);
+        const now = Date.now();
+        const timeDiff = (now - lastCommandTime) / 1000;
+        if (timeDiff < COOLDOWN_SECONDS) {
+          // Opcional: enviar un mensaje de "espera"
+          // await sock.sendMessage(from, { text: `Por favor, espera ${Math.ceil(COOLDOWN_SECONDS - timeDiff)} segundos.` }, { quoted: msg });
+          return console.log(`Comando ignorado por cooldown para: ${senderJid}`);
+        }
+      }
+
       try {
-        // Pasamos el caché al comando
+        // Retardo de respuesta artificial
+        await new Promise(resolve => setTimeout(resolve, RESPONSE_DELAY_MS));
+
+        // Ejecutar comando
         await command.execute({ sock, msg, args, commands, config, testCache });
+
+        // Actualizar el timestamp del último comando
+        cooldowns.set(senderJid, Date.now());
+
       } catch (error) {
         console.error(`Error al ejecutar el comando ${commandName}:`, error);
         await sock.sendMessage(from, { text: 'Ocurrió un error al intentar ejecutar ese comando.' }, { quoted: msg });
