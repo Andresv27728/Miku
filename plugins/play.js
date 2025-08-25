@@ -32,23 +32,15 @@ const playCommand = {
         { index: 2, quickReplyButton: { displayText: '🎬 Video', id: `descargar_video_${videoUrl}` } }
       ];
 
-      const templateMessage = {
+      // Se envía un mensaje de plantilla simple para depurar el problema de los botones.
+      // Se ha eliminado temporalmente la vista previa con imagen (externalAdReply).
+      const simpleTemplateMessage = {
         text: caption,
         footer: 'Elige una opción para descargar',
-        templateButtons: templateButtons,
-        // Para mostrar la imagen, la adjuntamos como un contexto externo.
-        contextInfo: {
-          externalAdReply: {
-            title: video.title,
-            body: video.author.name,
-            thumbnailUrl: video.thumbnail,
-            mediaType: 1, // 1 for image
-            sourceUrl: video.url
-          }
-        }
+        templateButtons: templateButtons
       };
 
-      await sock.sendMessage(msg.key.remoteJid, templateMessage, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, simpleTemplateMessage, { quoted: msg });
 
     } catch (error) {
       console.error("Error en el comando play:", error);
