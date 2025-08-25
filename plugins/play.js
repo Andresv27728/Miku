@@ -3,9 +3,10 @@ import yts from 'yt-search';
 const playCommand = {
   name: "play",
   category: "descargas",
-  description: "Busca una canción en YouTube y la envía.",
+  description: "Busca una canción en YouTube y prepara la descarga.",
 
-  async execute({ sock, msg, args }) {
+  // La función execute ahora acepta 'playContext'
+  async execute({ sock, msg, args, playContext }) {
     if (args.length === 0) {
       await sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de una canción. Ejemplo: `play Bella Ciao`" }, { quoted: msg });
       return;
@@ -24,23 +25,39 @@ const playCommand = {
       }
 
       const videoUrl = video.url;
-      const caption = `*${video.title}*\n\n*Autor:* ${video.author.name}\n*Duración:* ${video.timestamp}\n*Vistas:* ${video.views.toLocaleString()}`;
+      // Se construye el mensaje con las nuevas instrucciones.
+      const caption = `*${video.title}*\n\n*Autor:* ${video.author.name}\n*Duración:* ${video.timestamp}\n\n---\n*Responde a este mensaje con:*\n*1* - para descargar en Audio 🎵\n*2* - para descargar en Video 🎬`;
 
-      // La nueva forma de enviar botones es usando "templateMessage".
-      const templateButtons = [
-        { index: 1, quickReplyButton: { displayText: '🎵 Audio', id: `descargar_audio_${videoUrl}` } },
-        { index: 2, quickReplyButton: { displayText: '🎬 Video', id: `descargar_video_${videoUrl}` } }
-      ];
+      // Se envía el mensaje de texto.
+      const sentMsg = await sock.sendMessage(
+        msg.key.remoteJid,
+        {
+          text: caption,
+          // Se añade una vista previa del enlace para que se vea la miniatura.
+          contextInfo: {
+            externalAdReply: {
+              title: video.title,
+              body: video.author.name,
+              thumbnailUrl: video.thumbnail,
+              sourceUrl: video.url,
+              mediaType: 1,
+              renderLargerThumbnail: true
+            }
+          }
+        },
+        { quoted: msg }
+      );
 
-      // Se envía un mensaje de plantilla simple para depurar el problema de los botones.
-      // Se ha eliminado temporalmente la vista previa con imagen (externalAdReply).
-      const simpleTemplateMessage = {
-        text: caption,
-        footer: 'Elige una opción para descargar',
-        templateButtons: templateButtons
-      };
+      // Se guarda el ID del mensaje y la URL en el contexto para la respuesta.
+      playContext.set(sentMsg.key.id, videoUrl);
 
-      await sock.sendMessage(msg.key.remoteJid, simpleTemplateMessage, { quoted: msg });
+      // Se añade un temporizador para limpiar el contexto si el usuario no responde.
+      setTimeout(() => {
+        if (playContext.has(sentMsg.key.id)) {
+          playContext.delete(sentMsg.key.id);
+          console.log(`Contexto de play para el mensaje ${sentMsg.key.id} eliminado por tiempo de espera.`);
+        }
+      }, 300000); // 5 minutos de tiempo de espera
 
     } catch (error) {
       console.error("Error en el comando play:", error);
