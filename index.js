@@ -22,8 +22,9 @@ const __dirname = path.dirname(__filename);
 // El logger se establece en 'warn' para una consola más limpia.
 const logger = pino({ level: 'warn' });
 
-// --- COLECCIÓN DE COMANDOS ---
+// --- COLECCIÓN DE COMANDOS Y CACHÉ ---
 const commands = new Map();
+const testCache = new Map();
 
 // --- FUNCIÓN PARA CARGAR COMANDOS (sin cambios) ---
 async function loadCommands() {
@@ -108,8 +109,8 @@ async function connectToWhatsApp() {
     // --- Lógica de Comandos ---
     if (command) {
       try {
-        // El contexto de play ya no es necesario
-        await command.execute({ sock, msg, args, commands, config });
+        // Pasamos el caché al comando
+        await command.execute({ sock, msg, args, commands, config, testCache });
       } catch (error) {
         console.error(`Error al ejecutar el comando ${commandName}:`, error);
         await sock.sendMessage(from, { text: 'Ocurrió un error al intentar ejecutar ese comando.' }, { quoted: msg });
