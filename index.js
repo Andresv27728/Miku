@@ -128,6 +128,26 @@ export async function startBot(sessionId, isSubBot = false, requesterMsg = null)
 
     const from = msg.key.remoteJid;
     const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.templateButtonReplyMessage?.selectedId || '';
+
+    // --- Lógica de Anti-Link ---
+    const antilinkDbPath = path.resolve('./database/antilink.json');
+    try {
+        const data = fs.readFileSync(antilinkDbPath, 'utf8');
+        const antilinkDb = JSON.parse(data);
+        if (from.endsWith('@g.us') && antilinkDb[from]?.enabled) {
+            if (body.includes('chat.whatsapp.com/')) {
+                const metadata = await sock.groupMetadata(from);
+                const senderIsAdmin = metadata.participants.find(p => p.id === sender)?.admin;
+                const botIsAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
+
+                if (!senderIsAdmin && botIsAdmin) {
+                    await sock.sendMessage(from, { text: "No se permiten enlaces de otros grupos." }, { quoted: msg });
+                    await sock.sendMessage(from, { delete: msg.key });
+                }
+            }
+        }
+    } catch (e) { /* Ignorar si el archivo no existe */ }
+
     const args = body.trim().split(/ +/).slice(1);
     const commandName = body.trim().split(/ +/)[0].toLowerCase();
     const command = commands.get(commandName);
