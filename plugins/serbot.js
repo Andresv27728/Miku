@@ -4,24 +4,26 @@ import fs from 'fs';
 const serbotCommand = {
   name: "serbot",
   category: "subbots",
-  description: "Te convierte en un sub-bot, dándote una sesión propia.",
+  description: "Conecta este número como un sub-bot usando un código de emparejamiento.",
 
-  async execute({ sock, msg, config, pendingSerbotRequests }) {
+  async execute({ sock, msg, config }) {
+    // Por seguridad, solo el propietario del bot principal puede autorizarse a sí mismo como sub-bot.
+    // Esto se puede cambiar a un sistema de lista blanca en el futuro.
     const senderId = msg.sender;
     const senderNumber = senderId.split('@')[0];
     if (!config.ownerNumbers.includes(senderNumber)) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Este comando es solo para el propietario del bot." }, { quoted: msg });
+      return sock.sendMessage(msg.key.remoteJid, { text: "Actualmente, solo el propietario principal puede crear sub-bots." }, { quoted: msg });
+    }
+
+    // El comando no debe funcionar en grupos
+    if (msg.key.remoteJid.endsWith('@g.us')) {
+        return sock.sendMessage(msg.key.remoteJid, { text: "Este comando solo se puede usar en el chat privado del bot." }, { quoted: msg });
     }
 
     const sessionOwnerJid = msg.sender;
 
     if (subBots.has(sessionOwnerJid)) {
-      return sock.sendMessage(sessionOwnerJid, { text: "Ya tienes una sesión de sub-bot activa." });
-    }
-
-    // Anti-spam: verificar si ya hay una petición en curso
-    if (pendingSerbotRequests.has(sessionOwnerJid)) {
-        return sock.sendMessage(sessionOwnerJid, { text: "Ya hay una solicitud de conexión en curso. Por favor, espera." });
+      return sock.sendMessage(sessionOwnerJid, { text: "Ya tienes una sesión de sub-bot activa. Usa `deletesesion` para eliminarla primero." });
     }
 
     const sessionPath = `./jadibots/${sessionOwnerJid}`;
@@ -33,36 +35,11 @@ const serbotCommand = {
       fs.mkdirSync('./jadibots');
     }
 
-    // Añadir al set de peticiones pendientes
-    pendingSerbotRequests.add(sessionOwnerJid);
+    await sock.sendMessage(sessionOwnerJid, { text: "Iniciando tu sesión de sub-bot... Recibirás un código de emparejamiento." });
 
-    await sock.sendMessage(sessionOwnerJid, { text: "Iniciando tu sesión de sub-bot... Preparando el código QR. Tienes 45 segundos para escanear." });
-
-    // Iniciar la nueva instancia de bot
-    startBot(sessionOwnerJid, sock, msg);
-
-    // Lógica de Timeout
-    setTimeout(() => {
-      // Si después de 45 segundos la petición sigue pendiente (no se ha conectado)
-      if (pendingSerbotRequests.has(sessionOwnerJid)) {
-        pendingSerbotRequests.delete(sessionOwnerJid);
-
-        // Intentar cerrar la conexión si se quedó a medias
-        if (subBots.has(sessionOwnerJid)) {
-            try {
-                subBots.get(sessionOwnerJid).logout();
-            } catch {}
-            subBots.delete(sessionOwnerJid);
-        }
-
-        // Borrar la carpeta de sesión si se creó
-        if (fs.existsSync(sessionPath)) {
-            fs.rmSync(sessionPath, { recursive: true, force: true });
-        }
-
-        sock.sendMessage(sessionOwnerJid, { text: "Se acabó el tiempo. La solicitud para ser sub-bot ha expirado." });
-      }
-    }, 45000); // 45 segundos
+    // Iniciar la nueva instancia de bot, pasando 'true' para isSubBot y el mensaje para responder.
+    // El 'sock' que se pasa aquí es el del bot principal, que se usará para enviar el código.
+    startBot(sessionOwnerJid, true, msg);
   }
 };
 

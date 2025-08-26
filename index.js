@@ -7,7 +7,6 @@ import Baileys, {
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import qrcodeTerminal from 'qrcode-terminal';
-import qrcode from 'qrcode';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,7 +23,6 @@ const commands = new Map();
 const testCache = new Map();
 const cooldowns = new Map();
 export const subBots = new Map();
-const pendingSerbotRequests = new Set(); // Para evitar spam de serbot
 
 // --- CONFIGURACIÓN DE TIEMPOS ---
 const COOLDOWN_SECONDS = 5;
@@ -33,103 +31,85 @@ const RESPONSE_DELAY_MS = 2000;
 // --- FUNCIÓN PARA CARGAR COMANDOS ---
 async function loadCommands() {
   const pluginsDir = path.join(__dirname, 'plugins');
-  if (commands.size > 0) return; // Evitar recargar comandos
+  if (commands.size > 0) return;
   try {
     const files = fs.readdirSync(pluginsDir).filter(file => file.endsWith('.js'));
     for (const file of files) {
       try {
         const commandModule = await import(path.join('file://', pluginsDir, file));
         const command = commandModule.default;
-        if (command && command.name) {
-          commands.set(command.name, command);
-        }
-      } catch (error) {
-        console.error(`[-] Error al cargar el comando ${file}:`, error);
-      }
+        if (command && command.name) commands.set(command.name, command);
+      } catch (error) { console.error(`[-] Error al cargar ${file}:`, error); }
     }
     console.log(`[+] ${commands.size} comandos cargados.`);
-  } catch (error) {
-    console.error(`[-] No se pudo leer la carpeta de plugins:`, error);
-  }
+  } catch (error) { console.error(`[-] No se pudo leer la carpeta de plugins:`, error); }
 }
 
-
-// --- FUNCIÓN DE INICIO DE BOT (REFACTORIZADA PARA MÚLTIPLES SESIONES) ---
-export async function startBot(sessionId, requesterSocket = null, requesterMsg = null) {
+// --- FUNCIÓN DE INICIO DE BOT (REFACTORIZADA PARA CÓDIGO DE EMPAREJAMIENTO) ---
+export async function startBot(sessionId, isSubBot = false, requesterMsg = null) {
   console.log(`Iniciando bot para la sesión: ${sessionId}`);
 
-  const sessionPath = (sessionId === 'main_session') ? 'auth_info_baileys' : `jadibots/${sessionId}`;
+  const sessionPath = isSubBot ? `jadibots/${sessionId}` : 'auth_info_baileys';
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const sock = Baileys.default({
     version: (await fetchLatestBaileysVersion()).version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, logger),
-    },
+    auth: state,
     logger,
-    browser: (sessionId === 'main_session') ? ['JulesBot', 'Chrome', '1.0.0'] : ['SubBot', 'Chrome', '1.0.0'],
+    browser: isSubBot ? ['SubBot', 'Chrome', '1.0.0'] : ['JulesBot', 'Chrome', '1.0.0'],
+    printQRInTerminal: !isSubBot,
+    // Pedir código de emparejamiento si es un sub-bot
+    pairingCode: isSubBot,
   });
 
-  // Guardar la instancia del bot en el mapa
-  if (sessionId !== 'main_session') {
+  if (isSubBot) {
     subBots.set(sessionId, sock);
   }
 
-  // --- MANEJO DE EVENTOS ---
-  sock.ev.on('creds.update', saveCreds);
-
+  // Manejador de conexión
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
-      if (requesterSocket) {
-        // Enviar el QR como imagen al usuario que lo solicitó
+    // El QR solo se imprime para el bot principal
+    if (qr && !isSubBot) {
+      qrcodeTerminal.generate(qr, { small: true });
+    }
+
+    // Si tenemos un código de emparejamiento, lo enviamos al usuario que lo pidió
+    if(sock.authState.creds.pairingCode && isSubBot && requesterMsg) {
         try {
-          const qrBuffer = await qrcode.toBuffer(qr);
-          await requesterSocket.sendMessage(requesterMsg.key.remoteJid, {
-            image: qrBuffer,
-            caption: `Escanea este código QR para convertirte en un sub-bot.`
-          }, { quoted: requesterMsg });
+            const code = sock.authState.creds.pairingCode;
+            await sock.sendMessage(requesterMsg.key.remoteJid, {
+                text: `Tu código de emparejamiento es: *${code}*\n\nSigue estos pasos en el WhatsApp que quieres que sea el bot:\n1. Ve a Dispositivos Vinculados.\n2. Selecciona 'Vincular un dispositivo'.\n3. Elige 'Vincular con el número de teléfono' e ingresa el código.`
+            });
         } catch (e) {
-          console.error("Error enviando QR de sub-bot como imagen:", e);
+            console.error("Error enviando el código de emparejamiento:", e);
         }
-      } else if (sessionId === 'main_session') {
-        // Imprimir el QR en la consola para el bot principal
-        console.log('Escanea este código QR con tu teléfono:');
-        qrcodeTerminal.generate(qr, { small: true });
-      }
     }
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect.error instanceof Boom)?.output?.statusCode;
-      // Si la sesión se cierra y estaba pendiente, se elimina de pendientes
-      if (pendingSerbotRequests.has(sessionId)) {
-        pendingSerbotRequests.delete(sessionId);
-      }
       if (statusCode !== DisconnectReason.loggedOut) {
         console.log(`Reconectando sesión ${sessionId}...`);
-        startBot(sessionId, requesterSocket, requesterMsg);
+        startBot(sessionId, isSubBot, requesterMsg);
       } else {
-        console.log(`Sesión ${sessionId} cerrada. No se reconectará.`);
-        if (sessionId !== 'main_session') {
+        console.log(`Sesión ${sessionId} cerrada permanentemente.`);
+        if (isSubBot) {
           fs.rmSync(`./${sessionPath}`, { recursive: true, force: true });
           subBots.delete(sessionId);
         }
       }
     } else if (connection === 'open') {
       console.log(`Sesión ${sessionId} conectada exitosamente.`);
-       // Si la sesión se abre y estaba pendiente, se elimina de pendientes
-      if (pendingSerbotRequests.has(sessionId)) {
-        pendingSerbotRequests.delete(sessionId);
-      }
-      if (sessionId === 'main_session') {
+      if (!isSubBot) {
         console.log('\n================================================');
         console.log('            BOT PRINCIPAL CONECTADO');
         console.log('================================================\n');
       }
     }
   });
+
+  sock.ev.on('creds.update', saveCreds);
 
   // --- MANEJO DE MENSAJES (APLICA A TODAS LAS INSTANCIAS) ---
   sock.ev.on('messages.upsert', async (m) => {
@@ -160,7 +140,7 @@ export async function startBot(sessionId, requesterSocket = null, requesterMsg =
 
       try {
         await new Promise(resolve => setTimeout(resolve, RESPONSE_DELAY_MS));
-        await command.execute({ sock, msg, args, commands, config, testCache, subBots, pendingSerbotRequests });
+        await command.execute({ sock, msg, args, commands, config, testCache, subBots });
         cooldowns.set(sender, Date.now());
       } catch (error) {
         console.error(`Error en comando ${commandName}:`, error);
@@ -169,10 +149,28 @@ export async function startBot(sessionId, requesterSocket = null, requesterMsg =
     }
   });
 
-  // El manejador de bienvenida se queda solo para el bot principal por simplicidad
-  if (sessionId === 'main_session') {
+  if (!isSubBot) {
     sock.ev.on('group-participants.update', async (event) => {
-        // ... (lógica de bienvenida existente)
+        const { id, participants, action } = event;
+        const dbPath = path.resolve('./database/groups.json');
+        let db = {};
+        try {
+          const data = fs.readFileSync(dbPath, 'utf8');
+          db = JSON.parse(data);
+        } catch (e) { /* El archivo puede no existir, es seguro ignorar */ }
+        if (!db[id] || !db[id].welcome) return;
+        try {
+          const metadata = await sock.groupMetadata(id);
+          for (const p of participants) {
+            const userJid = p;
+            const userName = `@${userJid.split('@')[0]}`;
+            if (action === 'add') {
+              await sock.sendMessage(id, { text: `¡Bienvenido/a al grupo *${metadata.subject}*, ${userName}! 🎉`, mentions: [userJid] });
+            } else if (action === 'remove') {
+              await sock.sendMessage(id, { text: `Adiós, ${userName}. Te extrañaremos. 👋`, mentions: [userJid] });
+            }
+          }
+        } catch (e) { console.error("Error en group-participants.update:", e); }
     });
   }
 }
@@ -180,5 +178,5 @@ export async function startBot(sessionId, requesterSocket = null, requesterMsg =
 // --- INICIO DEL BOT ---
 (async () => {
   await loadCommands();
-  startBot('main_session'); // Iniciar la sesión del bot principal
+  startBot('main_session', false);
 })();
