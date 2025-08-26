@@ -18,13 +18,13 @@ const npmCommand = {
       const latestVersion = data['dist-tags'].latest;
       const versionData = data.versions[latestVersion];
 
-      const message = `*Información de NPM*\n\n` +
-                      `*Nombre:* ${data.name}\n` +
-                      `*Versión:* ${latestVersion}\n` +
-                      `*Descripción:* ${data.description || 'N/A'}\n` +
-                      `*Licencia:* ${data.license || 'N/A'}\n` +
-                      `*Autor:* ${data.author?.name || 'N/A'}\n` +
-                      `*Homepage:* ${data.homepage || 'N/A'}`;
+      const message = `*📦 Información de NPM 📦*\n\n` +
+                      `*🏷️ Nombre:* \`${data.name}\`\n` +
+                      `*🚀 Versión:* ${latestVersion}\n` +
+                      `*📄 Descripción:* ${data.description || 'N/A'}\n` +
+                      `*📜 Licencia:* ${data.license || 'N/A'}\n` +
+                      `*👤 Autor:* ${data.author?.name || 'N/A'}\n\n` +
+                      `*🔗 Homepage:* ${data.homepage || 'N/A'}`;
 
       await sock.sendMessage(msg.key.remoteJid, { text: message }, { quoted: msg });
 

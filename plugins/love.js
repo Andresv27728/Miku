@@ -33,9 +33,12 @@ const loveCommand = {
     const emojis = ["❤️", "💖", "💕", "💞", "💓", "💗", "💘", "💝"];
     const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
 
-    let message = `*Calculadora de Amor* ${randomEmoji}\n\n` +
-                  `Compatibilidad entre *${user1}* y *${user2}*:\n\n` +
-                  `*${compatibility}%*`;
+    let progressBar = '█'.repeat(Math.floor(compatibility / 10)) + '░'.repeat(10 - Math.floor(compatibility / 10));
+
+    let message = `*❤️‍🔥 Calculadora de Amor ❤️‍🔥*\n\n` +
+                  `*${user1}* + *${user2}*\n\n` +
+                  `*Compatibilidad:* ${compatibility}%\n` +
+                  `*[${progressBar}]*`;
 
     if (compatibility < 30) {
         message += "\n\n_Mejor sigan como amigos... 😬_";

@@ -20,15 +20,15 @@ const githubCommand = {
         throw new Error("Usuario no encontrado");
       }
 
-      const message = `*Información de GitHub*\n\n` +
-                      `*Nombre:* ${data.name || 'No especificado'}\n` +
-                      `*Usuario:* ${data.login}\n` +
-                      `*Biografía:* ${data.bio || 'No especificada'}\n` +
-                      `*Seguidores:* ${data.followers}\n` +
-                      `*Siguiendo:* ${data.following}\n` +
-                      `*Repositorios Públicos:* ${data.public_repos}\n` +
-                      `*Ubicación:* ${data.location || 'No especificada'}\n` +
-                      `*URL:* ${data.html_url}`;
+      const message = `*💻 Información de GitHub 💻*\n\n` +
+                      `*👤 Nombre:* ${data.name || 'N/A'}\n` +
+                      `*🔖 Usuario:* ${data.login}\n` +
+                      `*📝 Biografía:* ${data.bio || 'N/A'}\n` +
+                      `*👥 Seguidores:* ${data.followers}\n` +
+                      `*👣 Siguiendo:* ${data.following}\n` +
+                      `*📚 Repositorios Públicos:* ${data.public_repos}\n` +
+                      `*📍 Ubicación:* ${data.location || 'N/A'}\n\n` +
+                      `*🔗 URL:* ${data.html_url}`;
 
       await sock.sendMessage(msg.key.remoteJid, {
         image: { url: data.avatar_url },

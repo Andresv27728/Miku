@@ -17,7 +17,9 @@ const rateCommand = {
     }
 
     const rating = Math.floor(Math.random() * 10) + 1; // 1-10
-    const message = `Yo le doy a *${thingToRate}* un... *${rating}/10* ${getEmoji(rating)}`;
+    const message = `*📊 Medidor de Puntuación 📊*\n\n` +
+                  `Después de un análisis exhaustivo, mi veredicto para *${thingToRate}* es:\n\n` +
+                  `*Puntuación: ${rating}/10 ${getEmoji(rating)}*`;
 
     await sock.sendMessage(msg.key.remoteJid, { text: message }, { quoted: msg });
   }
