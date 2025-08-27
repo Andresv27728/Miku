@@ -24,6 +24,7 @@
     "@vitalets/google-translate-api": "^9.2.0",
     "lyrics-finder": "^21.7.0",
     "wikipedia": "^2.0.0",
-    "qrcode": "^1.5.3"
+    "qrcode": "^1.5.3",
+    "@bochilteam/scraper": "^4.2.4"
   }
 }

@@ -1,35 +1,33 @@
+import { googleImage } from '@bochilteam/scraper';
 import axios from 'axios';
+
+const forbiddenWords = ['caca', 'polla', 'porno', 'porn', 'gore', 'cum', 'semen', 'puta', 'puto', 'culo', 'putita', 'putito','pussy', 'hentai', 'pene', 'coño', 'asesinato', 'zoofilia', 'mia khalifa', 'desnudo', 'desnuda', 'cuca', 'chocha', 'muertos', 'pornhub', 'xnxx', 'xvideos', 'teta', 'vagina', 'marsha may', 'misha cross', 'sexmex', 'furry', 'furro', 'furra', 'xxx', 'rule34', 'panocha', 'pedofilia', 'necrofilia', 'pinga', 'horny', 'ass', 'nude', 'popo', 'nsfw', 'femdom', 'futanari', 'erofeet', 'sexo', 'sex', 'yuri', 'ero', 'ecchi', 'blowjob', 'anal', 'ahegao', 'pija', 'verga', 'trasero', 'violation', 'violacion', 'bdsm', 'cachonda', '+18', 'cp', 'mia marin', 'lana rhoades', 'cepesito', 'hot', 'buceta', 'xxx', 'Violet Myllers', 'Violet Myllers pussy', 'Violet Myllers desnuda', 'Violet Myllers sin ropa', 'Violet Myllers culo', 'Violet Myllers vagina', 'Pornografía', 'Pornografía infantil', 'niña desnuda', 'niñas desnudas', 'niña pussy', 'niña pack', 'niña culo', 'niña sin ropa', 'niña siendo abusada', 'niña siendo abusada sexualmente' , 'niña cogiendo', 'niña fototeta', 'niña vagina', 'hero Boku no pico', 'Mia Khalifa cogiendo', 'Mia Khalifa sin ropa', 'Mia Khalifa comiendo polla', 'Mia Khalifa desnuda'];
 
 const imagenCommand = {
   name: "imagen",
   category: "busquedas",
-  description: "Busca y envía una imagen de Google.",
+  description: "Busca una imagen en Google.",
   aliases: ["image", "gimage"],
 
   async execute({ sock, msg, args }) {
-    const query = args.join(' ');
-    if (!query) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, dime qué imagen quieres que busque." }, { quoted: msg });
+    const text = args.join(' ');
+    if (!text) {
+      return sock.sendMessage(msg.key.remoteJid, { text: "¿Qué imagen estás buscando?" }, { quoted: msg });
+    }
+
+    if (forbiddenWords.some(word => text.toLowerCase().includes(word))) {
+      return sock.sendMessage(msg.key.remoteJid, { text: "No voy a buscar eso." }, { quoted: msg });
     }
 
     try {
-      await sock.sendMessage(msg.key.remoteJid, { text: `Buscando en Google imágenes de "${query}"...` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: `Buscando imágenes de "${text}"...` }, { quoted: msg });
 
-      // Usamos una API que busca en Google Images
-      const apiUrl = `https://api.akuari.my.id/search/googleimage?query=${encodeURIComponent(query)}`;
-      const apiResponse = await axios.get(apiUrl);
+      const res = await googleImage(text);
+      const imageUrl = await res.getRandom();
 
-      // LOG DE DIAGNÓSTICO
-      console.log("Respuesta de la API de Google Image:", JSON.stringify(apiResponse.data, null, 2));
-
-      const images = apiResponse.data?.result;
-
-      if (!images || images.length === 0) {
-        throw new Error("No se encontraron imágenes para esa búsqueda.");
+      if (!imageUrl) {
+        throw new Error("No se encontró una URL de imagen válida.");
       }
-
-      // Tomar una imagen al azar de los resultados
-      const imageUrl = images[Math.floor(Math.random() * images.length)];
 
       // Descargar la imagen a un buffer para asegurar el envío
       const imageResponse = await axios.get(imageUrl, {
@@ -39,12 +37,12 @@ const imagenCommand = {
 
       await sock.sendMessage(msg.key.remoteJid, {
         image: imageBuffer,
-        caption: `Aquí tienes una imagen de "${query}".`
+        caption: `Resultado de: *${text}*`
       }, { quoted: msg });
 
     } catch (e) {
       console.error("Error en el comando imagen:", e);
-      await sock.sendMessage(msg.key.remoteJid, { text: `No se pudo obtener una imagen para "${query}".` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: `No se pudo obtener una imagen para "${text}".` }, { quoted: msg });
     }
   }
 };
