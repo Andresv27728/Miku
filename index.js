@@ -93,7 +93,7 @@ async function connectToWhatsApp() {
   // --- MANEJO DE MENSAJES ---
   // El nuevo sistema usa un handler.js, así que adjuntamos el nuestro.
   // La lógica de comandos se moverá a handler.js para ser reutilizable.
-  sock.ev.on('messages.upsert', (m) => sock.handler(m));
+  sock.ev.on('messages.upsert', (m) => sock.handler(m, false)); // false porque este es el bot principal
 
   // --- MANEJO DE BIENVENIDA ---
   sock.ev.on('group-participants.update', async (event) => {

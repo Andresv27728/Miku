@@ -10,8 +10,6 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Definir `jadi` folder, un nombre común para estas sesiones
 const jadi = 'jadibots';
 
 // --- Mensajes de UI ---
@@ -25,82 +23,64 @@ const rtx2 = `❀ *Hazte Sub Bot*
 ✐ Más opciones → Dispositivos vinculados → Vincular nuevo dispositivo → Con número
 ☁︎ *Importante:* El código es válido por 30 segundos.`.trim();
 
-
 // --- Función Principal del Sub-bot ---
 async function yukiJadiBot(options) {
     let { pathYukiJadiBot, m, conn, args, usedPrefix, command } = options;
-
-    // Lógica para manejar --code
     const mcode = args[0] && /(--code|code)/.test(args[0].trim()) ? true : false;
 
-    const pathCreds = path.join(pathYukiJadiBot, "creds.json");
     if (!fs.existsSync(pathYukiJadiBot)) {
         fs.mkdirSync(pathYukiJadiBot, { recursive: true });
     }
 
-    let { version, isLatest } = await fetchLatestBaileysVersion();
-    const msgRetryCache = new NodeCache();
+    let { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(pathYukiJadiBot);
 
     const connectionOptions = {
         logger: pino({ level: "fatal" }),
         printQRInTerminal: !mcode,
         auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
-        msgRetryCounterCache: msgRetryCache,
         browser: mcode ? ['Ubuntu', 'Chrome', '110.0.5585.95'] : ['Sub Bot', 'Chrome', '2.0.0'],
         version,
-        generateHighQualityLinkPreview: true,
-        shouldSyncHistoryMessage: () => false, // Para un inicio más rápido
-        patchMessageBeforeSending: (message) => {
-            const requiresPatch = !!(message.buttonsMessage || message.templateMessage || message.listMessage);
-            if (requiresPatch) {
-                message = { viewOnceMessage: { message: { messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} }, ...message }}};
-            }
-            return message;
-        }
+        shouldSyncHistoryMessage: () => false,
     };
 
     let sock = makeWASocket(connectionOptions);
     if (!global.conns) global.conns = [];
     global.conns.push(sock);
 
-    // Adjuntar el handler importado
     const handlerModule = await import('../handler.js');
-    sock.handler = handlerModule.handler.bind(sock);
+    // Pasamos 'true' para indicar que este es un sub-bot
+    sock.handler = (msg) => handlerModule.handler.call(sock, msg, true);
 
     async function connectionUpdate(update) {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr && !mcode) {
             let txtQR = await conn.sendMessage(m.chat, { image: await qrcode.toBuffer(qr, { scale: 8 }), caption: rtx }, { quoted: m });
-            setTimeout(() => { conn.sendMessage(m.chat, { delete: txtQR.key }); }, 30000);
+            setTimeout(() => conn.sendMessage(m.chat, { delete: txtQR.key }).catch(() => {}), 30000);
         }
 
-        if (qr && mcode) {
-            let secret = await sock.requestPairingCode((m.sender.split`@`[0]));
-            secret = secret.match(/.{1,4}/g)?.join("-");
+        if (sock.pairingCode && mcode) {
+            let code = sock.pairingCode.match(/.{1,4}/g)?.join("-");
             let txtCode = await conn.sendMessage(m.chat, { text: rtx2 }, { quoted: m });
-            let codeBot = await conn.sendMessage(m.chat, { text: secret }, { quoted: m });
-            setTimeout(() => { conn.sendMessage(m.chat, { delete: txtCode.key }); }, 30000);
-            setTimeout(() => { conn.sendMessage(m.chat, { delete: codeBot.key }); }, 30000);
+            let codeBot = await conn.sendMessage(m.chat, { text: code }, { quoted: m });
+            setTimeout(() => conn.sendMessage(m.chat, { delete: txtCode.key }).catch(() => {}), 30000);
+            setTimeout(() => conn.sendMessage(m.chat, { delete: codeBot.key }).catch(() => {}), 30000);
         }
 
         if (connection === 'open') {
-            let userName = sock.authState.creds.me.name || 'Sub-bot';
-            let userJid = sock.authState.creds.me.id || `${path.basename(pathYukiJadiBot)}@s.whatsapp.net`;
-            console.log(chalk.bold.cyanBright(`\nSUB-BOT CONECTADO: ${userName} (${userJid.split('@')[0]})`));
-            conn.reply(m.chat, `✅ Sub-bot conectado exitosamente como *${userName}*.`, m);
+            let userName = sock.user.name || 'Sub-bot';
+            console.log(chalk.bold.cyanBright(`SUB-BOT CONECTADO: ${userName} (${sock.user.id.split(':')[0]})`));
+            conn.reply(m.chat, `✅ Sub-bot conectado como *${userName}*.`, m);
         }
 
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
             console.log(chalk.yellow(`Conexión de sub-bot cerrada, razón: ${reason}`));
-
-            let i = global.conns.indexOf(sock);
+            let i = global.conns.findIndex(c => c.user?.id === sock.user?.id);
             if (i >= 0) global.conns.splice(i, 1);
-
             if (reason !== DisconnectReason.loggedOut) {
-                yukiJadiBot(options); // Reconectar
+                yukiJadiBot(options);
             } else {
                 conn.reply(m.chat, "La sesión del sub-bot se ha cerrado.", m);
                 if (fs.existsSync(pathYukiJadiBot)) {
@@ -123,14 +103,21 @@ const serbotCommand = {
     description: "Crea una sesión de sub-bot. Usa 'serbot code' para un código de emparejamiento.",
     aliases: ["qr", "code"],
 
-    async execute({ sock, msg, args, usedPrefix, command }) {
-        const MAX_SUB_BOTS = 5; // Límite de sub-bots
+    async execute({ sock, msg, args, config, command }) {
+        const MAX_SUB_BOTS = 5;
+        const senderId = msg.sender;
+        const senderNumber = senderId.split('@')[0];
+        const isOwner = config.ownerNumbers.includes(senderNumber);
+
+        if (!isOwner) {
+            return sock.sendMessage(msg.key.remoteJid, { text: "No tienes permiso para crear un sub-bot." }, { quoted: msg });
+        }
+
         if (global.conns && global.conns.length >= MAX_SUB_BOTS) {
             return sock.sendMessage(msg.key.remoteJid, { text: `Límite de sub-bots (${MAX_SUB_BOTS}) alcanzado.` }, { quoted: msg });
         }
 
-        let who = msg.key.participant || msg.sender;
-        let id = `${who.split`@`[0]}`;
+        let id = `${senderId.split`@`[0]}`;
         let pathYukiJadiBot = path.join(`./${jadi}/`, id);
 
         if (fs.existsSync(pathYukiJadiBot)) {
@@ -142,7 +129,7 @@ const serbotCommand = {
             m: msg,
             conn: sock,
             args,
-            usedPrefix: '', // No usamos prefijos
+            usedPrefix: '',
             command
         };
 
