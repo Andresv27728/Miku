@@ -1,7 +1,7 @@
 // Este es el manejador de mensajes que usarán los sub-bots.
 // Se ha adaptado para usar la misma lógica de comandos que el bot principal.
 
-import { commands, aliases, testCache, cooldowns, subBots } from './index.js';
+import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
 
 const COOLDOWN_SECONDS = 5;
@@ -42,7 +42,7 @@ export async function handler(m) {
 
       try {
         await new Promise(resolve => setTimeout(resolve, RESPONSE_DELAY_MS));
-        await command.execute({ sock, msg, args, commands, config, testCache, subBots });
+        await command.execute({ sock, msg, args, commands, config, testCache });
         cooldowns.set(sender, Date.now());
       } catch (error) {
         console.error(`Error en comando (sub-bot) ${commandName}:`, error);

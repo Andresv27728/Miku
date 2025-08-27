@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import pino from 'pino';
 import chalk from 'chalk';
-import { makeWASocket } from '../../lib/simple.js';
+import { makeWASocket } from '../lib/simple.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,7 +65,7 @@ async function yukiJadiBot(options) {
     global.conns.push(sock);
 
     // Adjuntar el handler importado
-    const handlerModule = await import('../../handler.js');
+    const handlerModule = await import('../handler.js');
     sock.handler = handlerModule.handler.bind(sock);
 
     async function connectionUpdate(update) {
