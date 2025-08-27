@@ -23,7 +23,11 @@ const imagenCommand = {
       await sock.sendMessage(msg.key.remoteJid, { text: `Buscando imágenes de "${text}"...` }, { quoted: msg });
 
       const res = await googleImage(text);
-      const imageUrl = await res.getRandom();
+      if (!res || res.length === 0) {
+        throw new Error("No se encontraron imágenes en Google.");
+      }
+      // Corregido: Usar el método estándar para obtener un elemento aleatorio de un array
+      const imageUrl = res[Math.floor(Math.random() * res.length)];
 
       if (!imageUrl) {
         throw new Error("No se encontró una URL de imagen válida.");
