@@ -15,8 +15,7 @@ const rtx2 = `❀ *Conexión por Código*
 
 
 async function startSubBot(options) {
-    let { path, m, conn } = options;
-    const mSender = m.key.remoteJid;
+    let { path, m, conn, targetPhoneNumber } = options;
 
     if (!fs.existsSync(path)) {
         fs.mkdirSync(path, { recursive: true });
@@ -47,33 +46,32 @@ async function startSubBot(options) {
 
         if (qr) {
             try {
-                const phoneNumber = m.sender.split('@')[0];
-                let code = await sock.requestPairingCode(phoneNumber);
+                let code = await sock.requestPairingCode(targetPhoneNumber);
                 code = code.match(/.{1,4}/g)?.join("-");
 
-                await conn.sendMessage(mSender, { text: rtx2 }, { quoted: m });
-                await conn.sendMessage(mSender, { text: `*${code}*` }, { quoted: m });
+                await conn.sendMessage(m.key.remoteJid, { text: rtx2 }, { quoted: m });
+                await conn.sendMessage(m.key.remoteJid, { text: `*${code}*` }, { quoted: m });
             } catch (e) {
                 console.error("Error solicitando el código de emparejamiento:", e);
-                await conn.sendMessage(mSender, { text: "Ocurrió un error al generar tu código. Inténtalo de nuevo." }, { quoted: m });
+                await conn.sendMessage(m.key.remoteJid, { text: "Ocurrió un error al generar el código. Asegúrate de que el número es válido." }, { quoted: m });
             }
         }
 
         if (connection === 'open') {
             let userName = sock.user.name || 'Sub-bot';
             console.log(chalk.bold.cyanBright(`SUB-BOT CONECTADO: ${userName} (${sock.user.id.split(':')[0]})`));
-            await conn.sendMessage(mSender, { text: `✅ Sub-bot conectado exitosamente como *${userName}*.` }, { quoted: m });
+            await conn.sendMessage(m.key.remoteJid, { text: `✅ Sub-bot para el número ${targetPhoneNumber} conectado exitosamente como *${userName}*.` }, { quoted: m });
         }
 
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
-            console.log(chalk.yellow(`Conexión de sub-bot cerrada, razón: ${reason}`));
-            let i = global.conns.findIndex(c => c.user?.id === sock.user?.id);
+            console.log(chalk.yellow(`Conexión de sub-bot (${targetPhoneNumber}) cerrada, razón: ${reason}`));
+            let i = global.conns.findIndex(c => c.user?.id.startsWith(targetPhoneNumber));
             if (i >= 0) global.conns.splice(i, 1);
-            if (reason !== DisconnectReason.loggedOut) {
-                // No reconectar
-            } else {
-                await conn.sendMessage(mSender, { text: "La sesión del sub-bot se ha cerrado." }, { quoted: m });
+
+            // NO se vuelve a llamar a startSubBot. Baileys maneja la reconexión.
+            if (reason === DisconnectReason.loggedOut) {
+                await conn.sendMessage(m.key.remoteJid, { text: `La sesión del sub-bot para ${targetPhoneNumber} se ha cerrado.` }, { quoted: m });
                 if (fs.existsSync(path)) {
                     fs.rmSync(path, { recursive: true, force: true });
                 }
@@ -89,9 +87,9 @@ async function startSubBot(options) {
 const serbotCommand = {
     name: "serbot",
     category: "subbots",
-    description: "Crea una sesión de sub-bot usando un código de emparejamiento.",
+    description: "Crea una sesión de sub-bot para un número específico.",
 
-    async execute({ sock, msg, config }) {
+    async execute({ sock, msg, args, config }) {
         const MAX_SUB_BOTS = 5;
         const senderId = msg.sender;
         const senderNumber = senderId.split('@')[0];
@@ -101,21 +99,26 @@ const serbotCommand = {
             return sock.sendMessage(msg.key.remoteJid, { text: "No tienes permiso para crear un sub-bot." }, { quoted: msg });
         }
 
+        const targetPhoneNumber = args[0]?.replace(/[^0-9]/g, ''); // Limpiar el número
+        if (!targetPhoneNumber) {
+            return sock.sendMessage(msg.key.remoteJid, { text: "Uso: `serbot <número_de_teléfono>`" }, { quoted: msg });
+        }
+
         if (global.conns && global.conns.length >= MAX_SUB_BOTS) {
             return sock.sendMessage(msg.key.remoteJid, { text: `Límite de sub-bots (${MAX_SUB_BOTS}) alcanzado.` }, { quoted: msg });
         }
 
-        let id = `${senderId.split`@`[0]}`;
-        let sessionPath = path.join(`./${jadi}/`, id);
+        const sessionPath = path.join(`./${jadi}/`, targetPhoneNumber);
 
         if (fs.existsSync(sessionPath)) {
-            return sock.sendMessage(msg.key.remoteJid, { text: "Ya tienes una sesión activa o archivos de sesión antiguos. Usa `deletesesion` primero." }, { quoted: msg });
+            return sock.sendMessage(msg.key.remoteJid, { text: "Ya existe una sesión para este número. Usa `deletesesion` primero." }, { quoted: msg });
         }
 
         const options = {
             path: sessionPath,
             m: msg,
             conn: sock,
+            targetPhoneNumber: targetPhoneNumber
         };
 
         startSubBot(options);
