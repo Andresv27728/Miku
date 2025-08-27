@@ -3,8 +3,8 @@ import axios from 'axios';
 const imagenCommand = {
   name: "imagen",
   category: "busquedas",
-  description: "Busca y envía una imagen sobre un tema.",
-  aliases: ["image"],
+  description: "Busca y envía una imagen de Google.",
+  aliases: ["image", "gimage"],
 
   async execute({ sock, msg, args }) {
     const query = args.join(' ');
@@ -13,10 +13,10 @@ const imagenCommand = {
     }
 
     try {
-      await sock.sendMessage(msg.key.remoteJid, { text: `Buscando imágenes de "${query}"...` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: `Buscando en Google imágenes de "${query}"...` }, { quoted: msg });
 
-      // Usamos una API pública para la búsqueda de imágenes
-      const apiUrl = `https://api.akuari.my.id/search/image?query=${encodeURIComponent(query)}`;
+      // Usamos una API que busca en Google Images
+      const apiUrl = `https://api.akuari.my.id/search/googleimage?query=${encodeURIComponent(query)}`;
       const apiResponse = await axios.get(apiUrl);
 
       const images = apiResponse.data?.result;
@@ -26,8 +26,7 @@ const imagenCommand = {
       }
 
       // Tomar una imagen al azar de los resultados
-      const randomImage = images[Math.floor(Math.random() * images.length)];
-      const imageUrl = randomImage.url;
+      const imageUrl = images[Math.floor(Math.random() * images.length)];
 
       // Descargar la imagen a un buffer para asegurar el envío
       const imageResponse = await axios.get(imageUrl, {
