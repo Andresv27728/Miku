@@ -12,6 +12,10 @@ const animeclipCommand = {
 
       // Usamos la API de waifu.pics que es más estable
       const apiResponse = await axios.get('https://api.waifu.pics/sfw/dance');
+
+      // LOG DE DIAGNÓSTICO
+      console.log("Respuesta de la API de animeclip:", JSON.stringify(apiResponse.data, null, 2));
+
       const videoUrl = apiResponse.data?.url;
 
       if (!videoUrl) {
