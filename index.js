@@ -138,9 +138,20 @@ export async function startBot(sessionId, isSubBot = false, requesterMsg = null)
         }
     }
 
+    // --- Lógica de Prefijos ---
+    let usedPrefix = '';
+    const groupPrefix = isGroup ? groupSettings.prefix : null;
+
+    if (groupPrefix) {
+        if (!body.startsWith(groupPrefix)) return; // Si hay prefijo y no se usa, ignorar
+        usedPrefix = groupPrefix;
+    }
+
+    const bodyWithoutPrefix = body.startsWith(usedPrefix) ? body.substring(usedPrefix.length) : body;
+
     // --- Lógica de Comandos ---
-    const args = body.trim().split(/ +/).slice(1);
-    let commandName = body.trim().split(/ +/)[0].toLowerCase();
+    const args = bodyWithoutPrefix.trim().split(/ +/).slice(1);
+    let commandName = bodyWithoutPrefix.trim().split(/ +/)[0].toLowerCase();
     let command = commands.get(commandName) || commands.get(aliases.get(commandName));
 
     if (command) {
