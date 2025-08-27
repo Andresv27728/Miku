@@ -1,10 +1,10 @@
-import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import Baileys, { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import NodeCache from "node-cache";
 import fs from "fs";
 import path from "path";
 import pino from 'pino';
 import chalk from 'chalk';
-import { makeWASocket } from '../lib/simple.js';
+// Se elimina la importación de ../lib/simple.js
 
 const jadi = 'jadibots';
 
@@ -27,16 +27,16 @@ async function startSubBot(options) {
 
     const connectionOptions = {
         logger: pino({ level: "fatal" }),
-        printQRInTerminal: false, // Siempre falso para sub-bots
-        auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
+        printQRInTerminal: false,
+        auth: state,
         browser: ['Sub-Bot', 'Chrome', '2.0.0'],
         version,
         shouldSyncHistoryMessage: () => false,
-        // Habilitar el modo de código de emparejamiento
         pairingCode: true
     };
 
-    let sock = makeWASocket(connectionOptions);
+    // Corregido: Usar Baileys.default directamente
+    let sock = Baileys.default(connectionOptions);
     if (!global.conns) global.conns = [];
     global.conns.push(sock);
 
@@ -46,11 +46,9 @@ async function startSubBot(options) {
     async function connectionUpdate(update) {
         const { connection, lastDisconnect, qr } = update;
 
-        // El evento QR es el trigger para solicitar el código de emparejamiento
         if (qr) {
             try {
-                const
-                 phoneNumber = m.sender.split('@')[0];
+                const phoneNumber = m.sender.split('@')[0];
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code.match(/.{1,4}/g)?.join("-");
 
@@ -74,7 +72,7 @@ async function startSubBot(options) {
             let i = global.conns.findIndex(c => c.user?.id === sock.user?.id);
             if (i >= 0) global.conns.splice(i, 1);
             if (reason !== DisconnectReason.loggedOut) {
-                // No reconectar automáticamente en este modelo
+                // No reconectar automáticamente
             } else {
                 conn.reply(m.chat, "La sesión del sub-bot se ha cerrado.", m);
                 if (fs.existsSync(path)) {
