@@ -51,10 +51,9 @@ async function loadCommands() {
   } catch (error) { console.error(`[-] No se pudo leer la carpeta de plugins:`, error); }
 }
 
-// --- FUNCIÓN DE INICIO DE BOT (REFACTORIZADA PARA CÓDIGO DE EMPAREJAMIENTO) ---
+// --- FUNCIÓN DE INICIO DE BOT ---
 export async function startBot(sessionId, isSubBot = false, requesterMsg = null) {
   console.log(`Iniciando bot para la sesión: ${sessionId}`);
-
   const sessionPath = isSubBot ? `jadibots/${sessionId}` : 'auth_info_baileys';
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
@@ -64,35 +63,21 @@ export async function startBot(sessionId, isSubBot = false, requesterMsg = null)
     logger,
     browser: isSubBot ? ['SubBot', 'Chrome', '1.0.0'] : ['JulesBot', 'Chrome', '1.0.0'],
     printQRInTerminal: !isSubBot,
-    // Pedir código de emparejamiento si es un sub-bot
     pairingCode: isSubBot,
   });
 
-  if (isSubBot) {
-    subBots.set(sessionId, sock);
-  }
+  if (isSubBot) subBots.set(sessionId, sock);
 
-  // Manejador de conexión
+  // --- MANEJO DE EVENTOS DE CONEXIÓN ---
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
-
-    // El QR solo se imprime para el bot principal
-    if (qr && !isSubBot) {
-      qrcodeTerminal.generate(qr, { small: true });
+    if (qr && !isSubBot) qrcodeTerminal.generate(qr, { small: true });
+    if (sock.authState.creds.pairingCode && isSubBot && requesterMsg) {
+      try {
+        const code = sock.authState.creds.pairingCode;
+        await sock.sendMessage(requesterMsg.key.remoteJid, { text: `Tu código de emparejamiento es: *${code}*\n\nSigue los pasos en el WhatsApp que quieres que sea el bot para vincularlo.` });
+      } catch (e) { console.error("Error enviando código de emparejamiento:", e); }
     }
-
-    // Si tenemos un código de emparejamiento, lo enviamos al usuario que lo pidió
-    if(sock.authState.creds.pairingCode && isSubBot && requesterMsg) {
-        try {
-            const code = sock.authState.creds.pairingCode;
-            await sock.sendMessage(requesterMsg.key.remoteJid, {
-                text: `Tu código de emparejamiento es: *${code}*\n\nSigue estos pasos en el WhatsApp que quieres que sea el bot:\n1. Ve a Dispositivos Vinculados.\n2. Selecciona 'Vincular un dispositivo'.\n3. Elige 'Vincular con el número de teléfono' e ingresa el código.`
-            });
-        } catch (e) {
-            console.error("Error enviando el código de emparejamiento:", e);
-        }
-    }
-
     if (connection === 'close') {
       const statusCode = (lastDisconnect.error instanceof Boom)?.output?.statusCode;
       if (statusCode !== DisconnectReason.loggedOut) {
@@ -106,101 +91,103 @@ export async function startBot(sessionId, isSubBot = false, requesterMsg = null)
         }
       }
     } else if (connection === 'open') {
-      console.log(`Sesión ${sessionId} conectada exitosamente.`);
-      if (!isSubBot) {
-        console.log('\n================================================');
-        console.log('            BOT PRINCIPAL CONECTADO');
-        console.log('================================================\n');
-      }
+      console.log(`Sesión ${sessionId} conectada.`);
+      if (!isSubBot) console.log('            BOT PRINCIPAL CONECTADO');
     }
   });
 
   sock.ev.on('creds.update', saveCreds);
 
-  // --- MANEJO DE MENSAJES (APLICA A TODAS LAS INSTANCIAS) ---
+  // --- MANEJO DE MENSAJES ---
   sock.ev.on('messages.upsert', async (m) => {
     const msg = m.messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
     const sender = msg.key.participant || msg.key.remoteJid;
-    msg.sender = sender;
+    const from = msg.key.remoteJid;
+    const isGroup = from.endsWith('@g.us');
 
+    // --- Lógica de Bloqueo ---
     const blockedDbPath = path.resolve('./database/blocked.json');
     try {
-      const data = fs.readFileSync(blockedDbPath, 'utf8');
-      const blockedUsers = JSON.parse(data);
-      if (blockedUsers.includes(sender)) return;
-    } catch (e) { /* Ignorar */ }
+      const blockedData = fs.readFileSync(blockedDbPath, 'utf8');
+      if (JSON.parse(blockedData).includes(sender)) return;
+    } catch (e) {}
 
-    const from = msg.key.remoteJid;
-    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.templateButtonReplyMessage?.selectedId || '';
-
-    // --- Lógica de Anti-Link ---
-    const antilinkDbPath = path.resolve('./database/antilink.json');
-    try {
-        const data = fs.readFileSync(antilinkDbPath, 'utf8');
-        const antilinkDb = JSON.parse(data);
-        if (from.endsWith('@g.us') && antilinkDb[from]?.enabled) {
-            if (body.includes('chat.whatsapp.com/')) {
-                const metadata = await sock.groupMetadata(from);
-                const senderIsAdmin = metadata.participants.find(p => p.id === sender)?.admin;
-                const botIsAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
-
-                if (!senderIsAdmin && botIsAdmin) {
-                    await sock.sendMessage(from, { text: "No se permiten enlaces de otros grupos." }, { quoted: msg });
-                    await sock.sendMessage(from, { delete: msg.key });
-                }
-            }
-        }
-    } catch (e) { /* Ignorar si el archivo no existe */ }
-
-    const args = body.trim().split(/ +/).slice(1);
-    let commandName = body.trim().split(/ +/)[0].toLowerCase();
-
-    // Buscar comando por nombre o por alias
-    let command = commands.get(commandName);
-    if (!command && aliases.has(commandName)) {
-        command = commands.get(aliases.get(commandName));
+    // --- Cargar Ajustes del Grupo ---
+    let groupSettings = {};
+    if (isGroup) {
+        const settingsDbPath = path.resolve('./database/groupSettings.json');
+        try {
+            const settingsData = fs.readFileSync(settingsDbPath, 'utf8');
+            groupSettings = JSON.parse(settingsData)[from] || {};
+        } catch(e) {}
     }
 
+    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+
+    // --- Lógica de Anti-Link ---
+    if (isGroup && groupSettings.antilink && body.includes('chat.whatsapp.com/')) {
+        const metadata = await sock.groupMetadata(from);
+        const senderIsAdmin = metadata.participants.find(p => p.id === sender)?.admin;
+        const botIsAdmin = metadata.participants.find(p => p.id === sock.user.id.split(':')[0] + '@s.whatsapp.net')?.admin;
+        if (!senderIsAdmin && botIsAdmin) {
+            await sock.sendMessage(from, { text: "No se permiten enlaces de otros grupos." }, { quoted: msg });
+            await sock.sendMessage(from, { delete: msg.key });
+            return; // Detener procesamiento si se borra el mensaje
+        }
+    }
+
+    // --- Lógica de Comandos ---
+    const args = body.trim().split(/ +/).slice(1);
+    let commandName = body.trim().split(/ +/)[0].toLowerCase();
+    let command = commands.get(commandName) || commands.get(aliases.get(commandName));
+
     if (command) {
+      // --- Lógica de Modo Admin ---
+      if (isGroup && groupSettings.adminMode) {
+        const metadata = await sock.groupMetadata(from);
+        const senderIsAdmin = metadata.participants.find(p => p.id === sender)?.admin;
+        if (!senderIsAdmin) return; // Ignorar comando si no es admin
+      }
+
+      // --- Lógica de Cooldown ---
       if (cooldowns.has(sender)) {
-        const timeDiff = (Date.now() - cooldowns.get(sender)) / 1000;
-        if (timeDiff < COOLDOWN_SECONDS) return;
+        if ((Date.now() - cooldowns.get(sender)) / 1000 < COOLDOWN_SECONDS) return;
       }
 
       try {
         await new Promise(resolve => setTimeout(resolve, RESPONSE_DELAY_MS));
-        // Se elimina iaConversations de los argumentos
         await command.execute({ sock, msg, args, commands, config, testCache, subBots });
         cooldowns.set(sender, Date.now());
       } catch (error) {
         console.error(`Error en comando ${commandName}:`, error);
-        await sock.sendMessage(from, { text: 'Ocurrió un error al intentar ejecutar ese comando.' }, { quoted: msg });
+        await sock.sendMessage(from, { text: 'Ocurrió un error.' }, { quoted: msg });
       }
     }
   });
 
+  // --- MANEJO DE BIENVENIDA (Solo Bot Principal) ---
   if (!isSubBot) {
     sock.ev.on('group-participants.update', async (event) => {
         const { id, participants, action } = event;
-        const dbPath = path.resolve('./database/groups.json');
-        let db = {};
+        const settingsDbPath = path.resolve('./database/groupSettings.json');
+        let settings = {};
         try {
-          const data = fs.readFileSync(dbPath, 'utf8');
-          db = JSON.parse(data);
-        } catch (e) { /* El archivo puede no existir, es seguro ignorar */ }
-        if (!db[id] || !db[id].welcome) return;
+          const data = fs.readFileSync(settingsDbPath, 'utf8');
+          settings = JSON.parse(data);
+        } catch (e) {}
+
+        if (!settings[id]?.welcome) return;
+
         try {
           const metadata = await sock.groupMetadata(id);
           for (const p of participants) {
-            const userJid = p;
-            const userName = `@${userJid.split('@')[0]}`;
-            if (action === 'add') {
-              await sock.sendMessage(id, { text: `¡Bienvenido/a al grupo *${metadata.subject}*, ${userName}! 🎉`, mentions: [userJid] });
-            } else if (action === 'remove') {
-              await sock.sendMessage(id, { text: `Adiós, ${userName}. Te extrañaremos. 👋`, mentions: [userJid] });
-            }
+            const userName = `@${p.split('@')[0]}`;
+            const message = action === 'add'
+              ? `¡Bienvenido/a al grupo *${metadata.subject}*, ${userName}! 🎉`
+              : `Adiós, ${userName}. Te extrañaremos. 👋`;
+            await sock.sendMessage(id, { text: message, mentions: [p] });
           }
         } catch (e) { console.error("Error en group-participants.update:", e); }
     });

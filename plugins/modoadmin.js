@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-// Apuntar a la nueva base de datos centralizada
 const dbPath = path.resolve('./database/groupSettings.json');
 
 function readSettingsDb() {
@@ -21,10 +20,10 @@ function writeSettingsDb(data) {
   }
 }
 
-const welcomeCommand = {
-  name: "welcome",
+const modoadminCommand = {
+  name: "modoadmin",
   category: "grupos",
-  description: "Activa o desactiva los mensajes de bienvenida/despedida.",
+  description: "Restringe el uso del bot solo a administradores.",
 
   async execute({ sock, msg, args }) {
     const from = msg.key.remoteJid;
@@ -45,24 +44,24 @@ const welcomeCommand = {
     }
 
     if (option !== 'on' && option !== 'off') {
-      return sock.sendMessage(from, { text: "Usa `welcome on` o `welcome off`." }, { quoted: msg });
+      return sock.sendMessage(from, { text: "Usa `modoadmin on` o `modoadmin off`." }, { quoted: msg });
     }
 
     const settings = readSettingsDb();
     if (!settings[from]) {
-      settings[from] = {}; // Crear objeto de ajustes para el grupo si no existe
+      settings[from] = {};
     }
 
     if (option === 'on') {
-      settings[from].welcome = true;
-      await sock.sendMessage(from, { text: "✅ Mensajes de bienvenida activados." }, { quoted: msg });
-    } else { // option === 'off'
-      settings[from].welcome = false;
-      await sock.sendMessage(from, { text: "❌ Mensajes de bienvenida desactivados." }, { quoted: msg });
+      settings[from].adminMode = true;
+      await sock.sendMessage(from, { text: "✅ Modo Admin activado. Solo los administradores podrán usar el bot en este grupo." }, { quoted: msg });
+    } else {
+      settings[from].adminMode = false;
+      await sock.sendMessage(from, { text: "❌ Modo Admin desactivado. Todos los miembros pueden usar el bot." }, { quoted: msg });
     }
 
     writeSettingsDb(settings);
   }
 };
 
-export default welcomeCommand;
+export default modoadminCommand;
