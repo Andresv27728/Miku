@@ -10,8 +10,8 @@ const animeclipCommand = {
     try {
       await sock.sendMessage(msg.key.remoteJid, { text: "Buscando un clip de anime..." }, { quoted: msg });
 
-      // Usamos una API pública para obtener un video de anime
-      const apiResponse = await axios.get('https://api.nekos.pro/api/v1/random/video');
+      // Usamos la API de waifu.pics que es más estable
+      const apiResponse = await axios.get('https://api.waifu.pics/sfw/dance');
       const videoUrl = apiResponse.data?.url;
 
       if (!videoUrl) {
@@ -39,7 +39,7 @@ const animeclipCommand = {
 
     } catch (e) {
       console.error("Error en el comando animeclip:", e);
-      await sock.sendMessage(msg.key.remoteJid, { text: `No se pudo obtener un clip en este momento. Error: ${e.message}` }, { quoted: msg });
+      await sock.sendMessage(msg.key.remoteJid, { text: `No se pudo obtener un clip en este momento. La API podría estar fallando.` }, { quoted: msg });
     }
   }
 };
