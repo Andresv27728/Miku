@@ -108,7 +108,7 @@ const serbotCommand = {
             return sock.sendMessage(msg.key.remoteJid, { text: `Límite de sub-bots (${MAX_SUB_BOTS}) alcanzado.` }, { quoted: msg });
         }
 
-        const sessionPath = path.join(`./${jadi}/`, targetPhoneNumber);
+        const sessionPath = path.resolve(`./${jadi}/`, targetPhoneNumber);
 
         if (fs.existsSync(sessionPath)) {
             return sock.sendMessage(msg.key.remoteJid, { text: "Ya existe una sesión para este número. Usa `deletesesion` primero." }, { quoted: msg });
