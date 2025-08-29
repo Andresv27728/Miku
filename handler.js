@@ -1,9 +1,24 @@
 // Este es el manejador de mensajes que usarán los sub-bots y el bot principal.
+import fs from 'fs';
+import path from 'path';
 import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
 
 const COOLDOWN_SECONDS = 5;
 const RESPONSE_DELAY_MS = 2000;
+
+const dbPath = path.resolve('./database/groupSettings.json');
+
+function readSettingsDb() {
+  try {
+    if (!fs.existsSync(dbPath)) return {};
+    const data = fs.readFileSync(dbPath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Error leyendo la base de datos de ajustes:", error);
+    return {};
+  }
+}
 
 export async function handler(m, isSubBot = false) { // Se añade isSubBot para diferenciar
   const sock = this;
@@ -16,12 +31,28 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
     msg.sender = senderId; // Adjuntar para fácil acceso
 
     const from = msg.key.remoteJid;
-    const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+    let body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
-    // ... (Aquí iría la lógica de antilink, prefix, etc. del bot principal si se quisiera)
+    const settings = readSettingsDb();
+    const groupPrefix = from.endsWith('@g.us') ? settings[from]?.prefix : null;
 
-    const args = body.trim().split(/ +/).slice(1);
-    let commandName = body.trim().split(/ +/)[0].toLowerCase();
+    let commandName;
+    let args;
+
+    if (groupPrefix) {
+      if (!body.startsWith(groupPrefix)) return;
+      body = body.slice(groupPrefix.length);
+      args = body.trim().split(/ +/).slice(1);
+      commandName = body.trim().split(/ +/)[0].toLowerCase();
+    } else {
+      // Si hay prefijo global o si no hay prefijo de grupo, procesar normal
+      const globalPrefix = config.prefix; // Asumiendo que podría haber un prefijo global en config
+      if (globalPrefix && !body.startsWith(globalPrefix)) return;
+      if (globalPrefix) body = body.slice(globalPrefix.length);
+
+      args = body.trim().split(/ +/).slice(1);
+      commandName = body.trim().split(/ +/)[0].toLowerCase();
+    }
 
     let command = commands.get(commandName) || commands.get(aliases.get(commandName));
 
