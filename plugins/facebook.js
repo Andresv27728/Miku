@@ -1,4 +1,4 @@
-import { igdl } from 'ruhend-scraper';
+import fg from 'api-dylux';
 
 const facebookCommand = {
   name: "facebook",
@@ -14,54 +14,38 @@ const facebookCommand = {
       return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de Facebook." }, { quoted: msg });
     }
 
-    const sharkEmoji = '🦈';
-    const warningEmoji = '⚠️';
-    const waitingEmoji = '🌊';
-    const successEmoji = '✨';
-    const errorEmoji = '❌';
-    const oopsEmoji = '💢';
-
-    // No hay 'react' en este framework, así que enviamos un mensaje de espera
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `${waitingEmoji} Procesando tu video, buba...` }, { quoted: msg });
-
-    let res;
-    try {
-        res = await igdl(url);
-    } catch (e) {
-        return sock.sendMessage(msg.key.remoteJid, { text: `${oopsEmoji} *Aww, algo salió mal desu~... ¡Revisa el enlace, buba!*` }, { quoted: msg });
-    }
-
-    let result = res.data;
-    if (!result || result.length === 0) {
-        return sock.sendMessage(msg.key.remoteJid, { text: `${warningEmoji} *Nada de nada ~ no encontré nada que descargar... buba! 🦈💦*` }, { quoted: msg });
-    }
-
-    let data;
-    try {
-        data = result.find(i => i.resolution === "720p (HD)") || result.find(i => i.resolution === "360p (SD)");
-    } catch (e) {
-        return sock.sendMessage(msg.key.remoteJid, { text: `${oopsEmoji} *Oopsie doopsie! Tuve problemas procesando los datos desu... 🦈💔*` }, { quoted: msg });
-    }
-
-    if (!data) {
-        return sock.sendMessage(msg.key.remoteJid, { text: `${warningEmoji} *Eh?? No encontré una resolución buena, uwu~ 💦*` }, { quoted: msg });
-    }
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video...` }, { quoted: msg });
 
     try {
-        await sock.sendMessage(
-            msg.key.remoteJid,
-            {
-                video: { url: data.url },
-                caption: `${sharkEmoji} *¡Aquí tienes, buba! Espero que te guste desu~ 🦈✨*`,
-                mimetype: 'video/mp4'
-            },
-            { quoted: msg }
-        );
-        // Editamos el mensaje de espera para confirmar el éxito
-        await sock.sendMessage(msg.key.remoteJid, { text: `${successEmoji} ¡Video enviado, buba!`, edit: waitingMsg.key });
-    } catch (e) {
-        console.error("Error al enviar video de Facebook:", e);
-        await sock.sendMessage(msg.key.remoteJid, { text: `${oopsEmoji} *¡Hyaaa! Algo falló al enviarte el video... ¡No te enojes conmigo desu~! 🦈💦*` }, { quoted: msg });
+      const result = await fg.fbdl(url);
+
+      if (!result || !result.data || result.data.length === 0) {
+        throw new Error("No se encontraron resultados válidos en la respuesta de la API.");
+      }
+
+      // El usuario mencionó que la URL está en result.data[0].url
+      // Pero la estructura de api-dylux puede variar, a menudo hay 'hd' y 'sd'
+      const downloadUrl = result.data[0]?.hd || result.data[0]?.sd || result.data[0]?.url;
+
+      if (!downloadUrl) {
+        throw new Error("La API no devolvió una URL de descarga válida.");
+      }
+
+      await sock.sendMessage(
+        msg.key.remoteJid,
+        {
+          video: { url: downloadUrl },
+          caption: `✨ ¡Aquí tienes tu video de Facebook!`,
+          mimetype: 'video/mp4'
+        },
+        { quoted: msg }
+      );
+
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ ¡Video enviado!`, edit: waitingMsg.key });
+
+    } catch (error) {
+      console.error("Error en el comando facebook (api-dylux):", error);
+      await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. La API podría estar fallando o el enlace es inválido.`, edit: waitingMsg.key });
     }
   }
 };
