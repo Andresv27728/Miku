@@ -1,4 +1,4 @@
-import fg from 'api-dylux';
+import axios from 'axios';
 
 const facebookCommand = {
   name: "facebook",
@@ -17,17 +17,16 @@ const facebookCommand = {
     const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video...` }, { quoted: msg });
 
     try {
-      const result = await fg.fbdl(url);
+      const apiUrl = `https://suhas-bro-api.vercel.app/download/fbdown?url=${encodeURIComponent(url)}`;
+      const response = await axios.get(apiUrl);
+      const result = response.data;
 
-      if (!result || !result.data || result.data.length === 0) {
-        throw new Error("No se encontraron resultados válidos en la respuesta de la API.");
-      }
+      // La estructura de la respuesta es desconocida, intentamos adivinar.
+      // Comprobamos propiedades comunes para un enlace de descarga.
+      const downloadUrl = result.url || result.link || result.download || result.data || result.result;
 
-      // El usuario mencionó que la URL está en result.data[0].url
-      // Pero la estructura de api-dylux puede variar, a menudo hay 'hd' y 'sd'
-      const downloadUrl = result.data[0]?.hd || result.data[0]?.sd || result.data[0]?.url;
-
-      if (!downloadUrl) {
+      if (!downloadUrl || typeof downloadUrl !== 'string') {
+        console.error("Respuesta de la API no contenía una URL válida:", result);
         throw new Error("La API no devolvió una URL de descarga válida.");
       }
 
@@ -44,7 +43,7 @@ const facebookCommand = {
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ ¡Video enviado!`, edit: waitingMsg.key });
 
     } catch (error) {
-      console.error("Error en el comando facebook (api-dylux):", error);
+      console.error("Error en el comando facebook (suhas-bro-api):", error);
       await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. La API podría estar fallando o el enlace es inválido.`, edit: waitingMsg.key });
     }
   }
