@@ -17,10 +17,8 @@ const playCommand = {
       const apiUrl = `https://apis.davidcyriltech.my.id/play?query=${encodeURIComponent(query)}`;
       const response = await axios.get(apiUrl, { timeout: 120000 });
 
-      // La estructura de la respuesta de esta API puede variar.
-      // Intentamos obtener la URL de varias formas comunes.
-      const downloadUrl = response.data?.result?.url || response.data?.url || response.data?.link;
-      const videoTitle = response.data?.result?.title || response.data?.title || query;
+      const downloadUrl = response.data?.result?.download_url;
+      const videoTitle = response.data?.result?.title || query;
 
       if (!downloadUrl) {
         console.error("Respuesta de la API sin URL:", response.data);
