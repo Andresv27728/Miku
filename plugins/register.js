@@ -1,27 +1,6 @@
-import fs from 'fs';
-import path from 'path';
+import { readUsersDb, writeUsersDb } from '../../lib/database.js';
 
-const dbPath = path.resolve('./database/users.json');
 const INITIAL_COINS = 1000;
-
-// Función para leer la base de datos de usuarios
-function readUsersDb() {
-  try {
-    const data = fs.readFileSync(dbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return {};
-  }
-}
-
-// Función para escribir en la base de datos de usuarios
-function writeUsersDb(data) {
-  try {
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
-  } catch (error) {
-    console.error("Error escribiendo en la base de datos de usuarios:", error);
-  }
-}
 
 const registerCommand = {
   name: "reg",

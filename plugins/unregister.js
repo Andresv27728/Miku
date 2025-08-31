@@ -1,26 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-const dbPath = path.resolve('./database/users.json');
-
-// Función para leer la base de datos de usuarios
-function readUsersDb() {
-  try {
-    const data = fs.readFileSync(dbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return {};
-  }
-}
-
-// Función para escribir en la base de datos de usuarios
-function writeUsersDb(data) {
-  try {
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
-  } catch (error) {
-    console.error("Error escribiendo en la base de datos de usuarios:", error);
-  }
-}
+import { readUsersDb, writeUsersDb } from '../../lib/database.js';
 
 const unregisterCommand = {
   name: "unreg",
