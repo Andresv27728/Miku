@@ -61,7 +61,15 @@ const menuCommand = {
 
     menuText += `╰───「 _by ${config.ownerName}_ 」───╯`;
 
-    await sock.sendMessage(msg.key.remoteJid, { text: menuText }, { quoted: msg });
+    await sock.sendMessage(
+      msg.key.remoteJid,
+      {
+        image: { url: 'https://files.catbox.moe/itgz1x.png' },
+        caption: menuText,
+        mimetype: 'image/png'
+      },
+      { quoted: msg }
+    );
   }
 };
 
