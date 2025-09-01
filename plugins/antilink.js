@@ -1,25 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-// Apuntar a la nueva base de datos centralizada
-const dbPath = path.resolve('./database/groupSettings.json');
-
-function readSettingsDb() {
-  try {
-    const data = fs.readFileSync(dbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return {};
-  }
-}
-
-function writeSettingsDb(data) {
-  try {
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2));
-  } catch (error) {
-    console.error("Error escribiendo en la base de datos de ajustes:", error);
-  }
-}
+import { readSettingsDb, writeSettingsDb } from '../lib/database.js';
 
 const antilinkCommand = {
   name: "antilink",
