@@ -41,19 +41,23 @@ async function startSubBot(options) {
     const handlerModule = await import('../handler.js');
     sock.handler = (msg) => handlerModule.handler.call(sock, msg, true);
 
+    let pairingCodeSent = false; // Flag para controlar el envío del código
+
     async function connectionUpdate(update) {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
+        if (qr && !pairingCodeSent) {
             try {
-                let code = await sock.requestPairingCode(targetPhoneNumber);
-                code = code.match(/.{1,4}/g)?.join("-");
+                // El código de emparejamiento ya está en la variable 'qr'
+                const code = qr.match(/.{1,4}/g)?.join("-");
 
                 await conn.sendMessage(m.key.remoteJid, { text: rtx2 }, { quoted: m });
                 await conn.sendMessage(m.key.remoteJid, { text: `*${code}*` }, { quoted: m });
+
+                pairingCodeSent = true; // Marcar como enviado para no repetir
             } catch (e) {
-                console.error("Error solicitando el código de emparejamiento:", e);
-                await conn.sendMessage(m.key.remoteJid, { text: "Ocurrió un error al generar el código. Asegúrate de que el número es válido." }, { quoted: m });
+                console.error("Error enviando el código de emparejamiento:", e);
+                await conn.sendMessage(m.key.remoteJid, { text: "Ocurrió un error al procesar el código de emparejamiento." }, { quoted: m });
             }
         }
 
