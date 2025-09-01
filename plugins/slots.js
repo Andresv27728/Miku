@@ -6,7 +6,7 @@ const slotsCommand = {
   description: "Juega a la máquina tragamonedas. Uso: slots <cantidad>",
   aliases: ["slot"],
 
-  async execute({ sock, msg, args }) {
+  async execute({ sock, msg, args, config }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const user = usersDb[senderId];
@@ -33,23 +33,29 @@ const slotsCommand = {
 
     const resultString = `[ ${results.join(" | ")} ]`;
     let winAmount = 0;
+    let tax = 0;
+    let netWin = 0;
     let winMessage = "";
 
     if (results[0] === results[1] && results[1] === results[2]) {
       // 3 of a kind
       winAmount = bet * 10;
-      winMessage = `¡JACKPOT! ¡Has ganado ${winAmount} coins! 🎉`;
+      tax = Math.floor(winAmount * config.taxRate);
+      netWin = winAmount - tax;
+      winMessage = `¡JACKPOT! ¡Has ganado ${winAmount} coins! 🎉\n(Impuesto: ${tax} coins)`;
     } else if (results[0] === results[1] || results[1] === results[2] || results[0] === results[2]) {
       // 2 of a kind
       winAmount = bet * 2;
-      winMessage = `¡Dos iguales! ¡Has ganado ${winAmount} coins!`;
+      tax = Math.floor(winAmount * config.taxRate);
+      netWin = winAmount - tax;
+      winMessage = `¡Dos iguales! ¡Has ganado ${winAmount} coins!\n(Impuesto: ${tax} coins)`;
     } else {
       // No win
-      winAmount = -bet;
+      netWin = -bet; // La pérdida es la apuesta completa
       winMessage = `¡Mala suerte! Has perdido ${bet} coins.`;
     }
 
-    user.coins += winAmount;
+    user.coins += netWin;
     writeUsersDb(usersDb);
 
     const finalMessage = `🎰 *Tragamonedas* 🎰\n\n${resultString}\n\n${winMessage}\n\n*Nuevo saldo:* ${user.coins} coins`;

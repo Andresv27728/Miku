@@ -9,7 +9,7 @@ const dailyCommand = {
   description: "Reclama tu recompensa diaria de monedas.",
   aliases: ["diario"],
 
-  async execute({ sock, msg }) {
+  async execute({ sock, msg, config }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const user = usersDb[senderId];
@@ -28,12 +28,18 @@ const dailyCommand = {
       return sock.sendMessage(msg.key.remoteJid, { text: `Ya reclamaste tu recompensa diaria. Vuelve en ${hoursLeft} horas y ${minutesLeft} minutos.` }, { quoted: msg });
     }
 
-    user.coins = (user.coins || 0) + DAILY_REWARD;
+    const tax = Math.floor(DAILY_REWARD * config.taxRate);
+    const netReward = DAILY_REWARD - tax;
+
+    user.coins = (user.coins || 0) + netReward;
     user.lastDaily = now;
 
     writeUsersDb(usersDb);
 
-    const dailyMessage = `🎉 ¡Has reclamado tu recompensa diaria de *${DAILY_REWARD} coins*!\nTu nuevo saldo es *${user.coins} coins*.`;
+    const dailyMessage = `🎉 ¡Has reclamado tu recompensa diaria de *${DAILY_REWARD} coins*!\n` +
+                         `💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n` +
+                         `💰 Ganancia neta: *${netReward} coins*.\n` +
+                         `🏦 Tu nuevo saldo es *${user.coins} coins*.`;
     await sock.sendMessage(msg.key.remoteJid, { text: dailyMessage }, { quoted: msg });
   }
 };

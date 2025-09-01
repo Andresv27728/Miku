@@ -10,7 +10,7 @@ const robCommand = {
   description: "Intenta robar monedas a otro usuario. ¡Cuidado, puedes fallar!",
   aliases: ["robar"],
 
-  async execute({ sock, msg }) {
+  async execute({ sock, msg, config }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const robber = usersDb[senderId];
@@ -52,13 +52,17 @@ const robCommand = {
       // Éxito
       const stolenPercentage = Math.random() * (0.3 - 0.1) + 0.1; // Roba entre 10% y 30%
       const stolenAmount = Math.floor(victim.coins * stolenPercentage);
+      const tax = Math.floor(stolenAmount * config.taxRate);
+      const netStolen = stolenAmount - tax;
 
-      robber.coins += stolenAmount;
-      victim.coins -= stolenAmount;
+      robber.coins += netStolen;
+      victim.coins -= stolenAmount; // La víctima pierde el monto total
 
       writeUsersDb(usersDb);
 
-      const successMessage = `🚨 ¡Robo exitoso! 🚨\n\nLe has robado *${stolenAmount} coins* a *${victim.name}*.`;
+      const successMessage = `🚨 ¡Robo exitoso! 🚨\n\nLe has robado *${stolenAmount} coins* a *${victim.name}*.\n` +
+                             `💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n` +
+                             `💰 Ganancia neta: *${netStolen} coins*.`;
       await sock.sendMessage(msg.key.remoteJid, { text: successMessage, contextInfo: { mentionedJid: [mentionedJid] } }, { quoted: msg });
 
     } else {

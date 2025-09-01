@@ -5,7 +5,7 @@ const crimeCommand = {
   category: "economia",
   description: "Comete un crimen para ganar (o perder) monedas. Mayor riesgo, mayor recompensa.",
 
-  async execute({ sock, msg }) {
+  async execute({ sock, msg, config }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const user = usersDb[senderId];
@@ -32,7 +32,10 @@ const crimeCommand = {
     if (Math.random() < SUCCESS_CHANCE) {
       // Éxito
       const earnings = Math.floor(Math.random() * (2000 - 500 + 1)) + 500;
-      user.coins += earnings;
+      const tax = Math.floor(earnings * config.taxRate);
+      const netEarnings = earnings - tax;
+
+      user.coins += netEarnings;
       writeUsersDb(usersDb);
       const successMessages = [
         `Robaste un banco y escapaste con ${earnings} coins.`,
@@ -40,7 +43,8 @@ const crimeCommand = {
         `Realizaste un atraco exitoso y te llevaste ${earnings} coins.`
       ];
       const message = successMessages[Math.floor(Math.random() * successMessages.length)];
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ *¡Éxito!* ${message}\n*Nuevo saldo:* ${user.coins} coins` }, { quoted: msg });
+      const taxMessage = `\n💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n💰 Ganancia neta: *${netEarnings} coins*.`;
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ *¡Éxito!* ${message}${taxMessage}\n\n*Nuevo saldo:* ${user.coins} coins` }, { quoted: msg });
     } else {
       // Fracaso
       user.coins = Math.max(0, user.coins - PENALTY_AMOUNT);
