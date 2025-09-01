@@ -6,7 +6,7 @@ const giveCommand = {
   description: "Transfiere monedas a otro usuario.",
   aliases: ["dar", "transferir"],
 
-  async execute({ sock, msg, args }) {
+  async execute({ sock, msg, args, config }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const senderUser = usersDb[senderId];
@@ -38,14 +38,18 @@ const giveCommand = {
       return sock.sendMessage(msg.key.remoteJid, { text: `No tienes suficientes monedas. Saldo actual: ${senderUser.coins}` }, { quoted: msg });
     }
 
+    const tax = Math.floor(amount * config.taxRate);
+    const netAmount = amount - tax;
+
     senderUser.coins -= amount;
-    targetUser.coins += amount;
+    targetUser.coins += netAmount;
 
     writeUsersDb(usersDb);
 
     const giveMessage = `✅ Has transferido *${amount} coins* a *${targetUser.name}*.\n` +
-                        `Tu nuevo saldo: ${senderUser.coins} coins.\n` +
-                        `Nuevo saldo de ${targetUser.name}: ${targetUser.coins} coins.`;
+                        `💸 Se aplicó un impuesto de ${config.taxRate * 100}% (*${tax} coins*).\n` +
+                        `💰 *${targetUser.name}* recibió *${netAmount} coins*.\n\n` +
+                        `Tu nuevo saldo: ${senderUser.coins} coins.`;
 
     await sock.sendMessage(msg.key.remoteJid, { text: giveMessage, contextInfo: { mentionedJid: [mentionedJid] } }, { quoted: msg });
   }

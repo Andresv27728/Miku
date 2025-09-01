@@ -10,6 +10,9 @@ const config = {
   // El nombre del propietario del bot.
   ownerName: "YO SOY YO",
 
+  // Tasa de impuestos para la economía (ej. 0.10 para 10%)
+  taxRate: 0.10,
+
   // Números de los propietarios del bot (en formato de WhatsApp, ej: '5211234567890').
   // El bot puede tener funcionalidades exclusivas para estos números.
   // Se añade el LID del propietario para asegurar el reconocimiento.

@@ -8,7 +8,7 @@ const workCommand = {
   description: "Trabaja para ganar monedas. Tiene un tiempo de espera de 1 hora.",
   aliases: ["trabajar"],
 
-  async execute({ sock, msg }) {
+  async execute({ sock, msg, config }) {
     const senderId = msg.sender;
     const usersDb = readUsersDb();
     const user = usersDb[senderId];
@@ -27,12 +27,18 @@ const workCommand = {
     }
 
     const earnings = Math.floor(Math.random() * (500 - 100 + 1)) + 100;
-    user.coins = (user.coins || 0) + earnings;
+    const tax = Math.floor(earnings * config.taxRate);
+    const netEarnings = earnings - tax;
+
+    user.coins = (user.coins || 0) + netEarnings;
     user.lastWork = now;
 
     writeUsersDb(usersDb);
 
-    const workMessage = `💪 Has trabajado duro y ganaste *${earnings} coins*.\nTu nuevo saldo es *${user.coins} coins*.`;
+    const workMessage = `💪 Has trabajado duro y ganaste *${earnings} coins*.\n` +
+                        `💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n` +
+                        `💰 Ganancia neta: *${netEarnings} coins*.\n` +
+                        `🏦 Tu nuevo saldo es *${user.coins} coins*.`;
     await sock.sendMessage(msg.key.remoteJid, { text: workMessage }, { quoted: msg });
   }
 };
