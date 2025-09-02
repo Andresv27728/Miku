@@ -63,7 +63,6 @@ async function connectToWhatsApp() {
     auth: state,
     logger,
     browser: ['JulesBot', 'Chrome', '1.0.0'],
-    printQRInTerminal: true,
   });
 
   // Adjuntar el handler principal al socket del bot principal
