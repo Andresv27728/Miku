@@ -1,5 +1,4 @@
 import Baileys, { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
-import NodeCache from "node-cache";
 import fs from "fs";
 import path from "path";
 import pino from 'pino';
@@ -24,14 +23,14 @@ async function startSubBot(options) {
     let { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(path);
 
+    // Se eliminó 'pairingCode: true' de aquí.
     const connectionOptions = {
         logger: pino({ level: "fatal" }),
-        printQRInTerminal: false,
+        printQRInTerminal: false, // Siempre falso para sub-bots
         auth: state,
         browser: ['Sub-Bot', 'Chrome', '2.0.0'],
         version,
         shouldSyncHistoryMessage: () => false,
-        pairingCode: true
     };
 
     let sock = Baileys.default(connectionOptions);
@@ -41,25 +40,9 @@ async function startSubBot(options) {
     const handlerModule = await import('../handler.js');
     sock.handler = (msg) => handlerModule.handler.call(sock, msg, true);
 
-    let pairingCodeSent = false; // Flag para controlar el envío del código
-
+    // El manejador de conexión ahora es más simple.
     async function connectionUpdate(update) {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr && !pairingCodeSent) {
-            try {
-                // El código de emparejamiento ya está en la variable 'qr'
-                const code = qr.match(/.{1,4}/g)?.join("-");
-
-                await conn.sendMessage(m.key.remoteJid, { text: rtx2 }, { quoted: m });
-                await conn.sendMessage(m.key.remoteJid, { text: `*${code}*` }, { quoted: m });
-
-                pairingCodeSent = true; // Marcar como enviado para no repetir
-            } catch (e) {
-                console.error("Error enviando el código de emparejamiento:", e);
-                await conn.sendMessage(m.key.remoteJid, { text: "Ocurrió un error al procesar el código de emparejamiento." }, { quoted: m });
-            }
-        }
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'open') {
             let userName = sock.user.name || 'Sub-bot';
@@ -73,7 +56,6 @@ async function startSubBot(options) {
             let i = global.conns.findIndex(c => c.user?.id.startsWith(targetPhoneNumber));
             if (i >= 0) global.conns.splice(i, 1);
 
-            // NO se vuelve a llamar a startSubBot. Baileys maneja la reconexión.
             if (reason === DisconnectReason.loggedOut) {
                 await conn.sendMessage(m.key.remoteJid, { text: `La sesión del sub-bot para ${targetPhoneNumber} se ha cerrado.` }, { quoted: m });
                 if (fs.existsSync(path)) {
@@ -103,7 +85,7 @@ const serbotCommand = {
             return sock.sendMessage(msg.key.remoteJid, { text: "No tienes permiso para crear un sub-bot." }, { quoted: msg });
         }
 
-        const targetPhoneNumber = args[0]?.replace(/[^0-9]/g, ''); // Limpiar el número
+        const targetPhoneNumber = args[0]?.replace(/[^0-9]/g, '');
         if (!targetPhoneNumber) {
             return sock.sendMessage(msg.key.remoteJid, { text: "Uso: `serbot <número_de_teléfono>`" }, { quoted: msg });
         }
@@ -113,19 +95,35 @@ const serbotCommand = {
         }
 
         const sessionPath = path.resolve(`./${jadi}/`, targetPhoneNumber);
-
         if (fs.existsSync(sessionPath)) {
             return sock.sendMessage(msg.key.remoteJid, { text: "Ya existe una sesión para este número. Usa `deletesesion` primero." }, { quoted: msg });
         }
 
-        const options = {
-            path: sessionPath,
-            m: msg,
-            conn: sock,
-            targetPhoneNumber: targetPhoneNumber
-        };
+        // --- Lógica de Código de Vinculación Movida Aquí ---
+        try {
+            await sock.sendMessage(msg.key.remoteJid, { text: "Generando código de vinculación..." }, { quoted: msg });
 
-        startSubBot(options);
+            // 1. Solicitar el código desde el bot principal
+            let code = await sock.requestPairingCode(targetPhoneNumber);
+            code = code.match(/.{1,4}/g)?.join("-");
+
+            // 2. Enviar el código al usuario
+            await sock.sendMessage(msg.key.remoteJid, { text: rtx2 }, { quoted: m });
+            await sock.sendMessage(msg.key.remoteJid, { text: `*${code}*` }, { quoted: m });
+
+            // 3. Iniciar la sesión del sub-bot en segundo plano
+            const options = {
+                path: sessionPath,
+                m: msg,
+                conn: sock,
+                targetPhoneNumber: targetPhoneNumber
+            };
+            startSubBot(options);
+
+        } catch (e) {
+            console.error("Error en el comando serbot:", e);
+            await sock.sendMessage(msg.key.remoteJid, { text: "Ocurrió un error al generar el código. Asegúrate de que el número es válido y que el bot principal está conectado." }, { quoted: msg });
+        }
     }
 };
 
