@@ -1,4 +1,5 @@
-import axios from 'axios';
+import youtubedl from 'youtube-dl-exec';
+import yts from 'yt-search';
 
 const playCommand = {
   name: "play",
@@ -11,26 +12,33 @@ const playCommand = {
     }
 
     const query = args.join(' ');
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando y procesando "${query}"...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando y procesando "${query}"...` }, { quoted: msg });
 
     try {
-      const apiUrl = `https://apis.davidcyriltech.my.id/play?query=${encodeURIComponent(query)}`;
-      const response = await axios.get(apiUrl, { timeout: 120000 });
-
-      const downloadUrl = response.data?.result?.download_url;
-      const videoTitle = response.data?.result?.title || query;
-
-      if (!downloadUrl) {
-        console.error("Respuesta de la API sin URL:", response.data);
-        throw new Error("La API no devolvió una URL de descarga válida.");
+      // Usar yt-search para obtener el título correcto y la miniatura
+      const searchResults = await yts(query);
+      if (!searchResults.videos.length) {
+        throw new Error("No se encontraron resultados para tu búsqueda.");
       }
+      const videoInfo = searchResults.videos[0];
+      const videoTitle = videoInfo.title;
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `Enviando audio para *${videoTitle}*...` }, { edit: waitingMsg.key });
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${videoTitle}*.\n\n⬇️ Descargando audio...` }, { edit: waitingMsg.key });
+
+      // Usar youtube-dl-exec para descargar el audio
+      const audioUrl = await youtubedl(videoInfo.url, {
+        "get-url": true,
+        "format": "bestaudio/best",
+      });
+
+      if (!audioUrl) {
+        throw new Error("No se pudo obtener el enlace de descarga del audio.");
+      }
 
       await sock.sendMessage(
         msg.key.remoteJid,
         {
-          audio: { url: downloadUrl },
+          audio: { url: audioUrl },
           mimetype: 'audio/mpeg'
         },
         { quoted: msg }
@@ -38,14 +46,7 @@ const playCommand = {
 
     } catch (error) {
       console.error("Error en el comando play:", error);
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      console.error("Detalle del error:", errorMessage);
-
-      if (error.code === 'ECONNABORTED') {
-        await sock.sendMessage(msg.key.remoteJid, { text: "El servidor de descargas tardó demasiado en responder." }, { edit: waitingMsg.key, quoted: msg });
-      } else {
-        await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al procesar la solicitud de audio.`, edit: waitingMsg.key, quoted: msg });
-      }
+      await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al procesar la solicitud de audio. Inténtalo de nuevo.`, edit: waitingMsg.key });
     }
   }
 };
