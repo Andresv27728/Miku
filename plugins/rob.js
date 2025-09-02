@@ -48,7 +48,17 @@ const robCommand = {
 
     robber.lastRob = now; // Actualizar cooldown independientemente del resultado
 
-    if (Math.random() < SUCCESS_CHANCE) {
+    // Verificar si hay efectos activos
+    let currentSuccessChance = SUCCESS_CHANCE;
+    let luckActive = false;
+    if (robber.effects?.suerte && robber.effects.suerte > Date.now()) {
+      currentSuccessChance = 0.6; // Aumentar la probabilidad de éxito al 60%
+      luckActive = true;
+    } else if (robber.effects?.suerte) {
+      delete robber.effects.suerte; // Limpiar efecto expirado
+    }
+
+    if (Math.random() < currentSuccessChance) {
       // Éxito
       const stolenPercentage = Math.random() * (0.3 - 0.1) + 0.1; // Roba entre 10% y 30%
       const stolenAmount = Math.floor(victim.coins * stolenPercentage);
@@ -60,9 +70,14 @@ const robCommand = {
 
       writeUsersDb(usersDb);
 
-      const successMessage = `🚨 ¡Robo exitoso! 🚨\n\nLe has robado *${stolenAmount} coins* a *${victim.name}*.\n` +
-                             `💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n` +
-                             `💰 Ganancia neta: *${netStolen} coins*.`;
+      let successMessage = `🚨 ¡Robo exitoso! 🚨\n\nLe has robado *${stolenAmount} coins* a *${victim.name}*.\n` +
+                           `💸 Se dedujo un impuesto del ${config.taxRate * 100}% (*${tax} coins*).\n` +
+                           `💰 Ganancia neta: *${netStolen} coins*.`;
+
+      if (luckActive) {
+        successMessage += "\n\n✨ *¡Tu Poción de Suerte te ha ayudado!*";
+      }
+
       await sock.sendMessage(msg.key.remoteJid, { text: successMessage, contextInfo: { mentionedJid: [mentionedJid] } }, { quoted: msg });
 
     } else {
