@@ -1,41 +1,9 @@
-import { exec } from 'child_process';
 import yts from 'yt-search';
 import fs from 'fs';
-import path from 'path';
 import axios from 'axios';
+import { downloadWithYtdlp, downloadWithDdownr } from '../lib/downloaders.js';
 
-// --- Helper Functions for Downloading ---
-
-async function downloadWithYtdlp(url) {
-  const tempDir = './temp';
-  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-  const tempPath = path.join(tempDir, `${Date.now()}.mp4`);
-  const command = `yt-dlp -o "${tempPath}" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 "${url}"`;
-
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) return reject(error);
-      if (!fs.existsSync(tempPath) || fs.statSync(tempPath).size === 0) return reject(new Error('yt-dlp downloaded an empty file.'));
-      resolve(tempPath);
-    });
-  });
-}
-
-async function downloadWithDdownr(url) {
-    const res = await axios.get(`https://p.oceansaver.in/ajax/download.php?format=720&url=${encodeURIComponent(url)}`);
-    if (!res.data?.success || !res.data.id) throw new Error("ddownr API: Failed to initiate conversion.");
-
-    for (let i = 0; i < 20; i++) {
-        const prog = await axios.get(`https://p.oceansaver.in/ajax/progress.php?id=${res.data.id}`);
-        if (prog.data?.success && prog.data.progress === 1000) {
-            const file = await axios.get(prog.data.download_url, { responseType: 'arraybuffer' });
-            return file.data;
-        }
-        await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-    throw new Error("ddownr API: Conversion timed out.");
-}
-
+// Helper for the extra APIs
 async function downloadWithApi(apiUrl) {
     const response = await axios.get(apiUrl);
     const result = response.data;
@@ -45,7 +13,6 @@ async function downloadWithApi(apiUrl) {
     const file = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
     return file.data;
 }
-
 
 const play2Command = {
   name: "play2",
@@ -73,15 +40,17 @@ const play2Command = {
 
       // --- Fallback System ---
       try {
-        const tempFilePath = await downloadWithYtdlp(url);
+        const tempFilePath = await downloadWithYtdlp(url, true); // true para video
         videoBuffer = fs.readFileSync(tempFilePath);
         fs.unlinkSync(tempFilePath);
       } catch (e1) {
-        console.error("yt-dlp failed:", e1.message);
+        console.error("play2: yt-dlp failed:", e1.message);
         try {
-          videoBuffer = await downloadWithDdownr(url);
+          const downloadUrl = await downloadWithDdownr(url, true); // true para video
+          const response = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+          videoBuffer = response.data;
         } catch (e2) {
-          console.error("ddownr failed:", e2.message);
+          console.error("play2: ddownr failed:", e2.message);
           const fallbackApis = [
             `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}`,
             `https://mahiru-shiina.vercel.app/download/ytmp4?url=${encodeURIComponent(url)}`,
