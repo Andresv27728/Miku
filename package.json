@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "./start.sh"
   },
   "keywords": [
     "whatsapp",
@@ -20,6 +20,7 @@
     "@whiskeysockets/baileys": "^6.7.2",
     "axios": "^1.7.2",
     "chalk": "^5.3.0",
+    "form-data": "^4.0.4",
     "lyrics-finder": "^21.7.0",
     "node-cache": "^5.1.2",
     "pino": "^8.21.0",
@@ -27,6 +28,7 @@
     "wa-sticker-formatter": "^4.4.4",
     "wikipedia": "^2.0.0",
     "ws": "^8.17.0",
+    "youtube-dl-exec": "^3.0.24",
     "yt-search": "2.10.4"
   }
 }

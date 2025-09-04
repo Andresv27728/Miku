@@ -1,17 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-const dbPath = path.resolve('./database/users.json');
-
-// Función para leer la base de datos de usuarios
-function readUsersDb() {
-  try {
-    const data = fs.readFileSync(dbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return {};
-  }
-}
+import { readUsersDb } from '../lib/database.js';
 
 const balanceCommand = {
   name: "balance",

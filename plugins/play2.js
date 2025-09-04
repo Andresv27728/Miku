@@ -1,63 +1,88 @@
 import yts from 'yt-search';
+import fs from 'fs';
 import axios from 'axios';
+import { downloadWithYtdlp, downloadWithDdownr } from '../lib/downloaders.js';
+
+// Helper for the extra APIs
+async function downloadWithApi(apiUrl) {
+    const response = await axios.get(apiUrl);
+    const result = response.data;
+    const downloadUrl = result?.result?.downloadUrl || result?.result?.url || result?.data?.dl || result?.dl;
+    if (!downloadUrl) throw new Error(`API ${apiUrl} did not return a valid download link.`);
+
+    const file = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+    return file.data;
+}
 
 const play2Command = {
   name: "play2",
   category: "descargas",
-  description: "Busca y descarga una canción en formato de audio (MP3) usando la API 2.",
+  description: "Busca y descarga un video en formato MP4 usando múltiples métodos.",
 
   async execute({ sock, msg, args }) {
-    if (args.length === 0) {
-      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de una canción." }, { quoted: msg });
-    }
+    if (args.length === 0) return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona el nombre de un video." }, { quoted: msg });
 
     const query = args.join(' ');
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Buscando "${query}"...` }, { quoted: msg });
+    let waitingMsg;
 
     try {
-      const searchResult = await yts(query);
-      const video = searchResult.videos[0];
+      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando "${query}"...` }, { quoted: msg });
 
-      if (!video) {
-        return sock.sendMessage(msg.key.remoteJid, { text: "No se encontraron resultados para tu búsqueda." }, { edit: waitingMsg.key });
+      const searchResults = await yts(query);
+      if (!searchResults.videos.length) throw new Error("No se encontraron resultados.");
+
+      const videoInfo = searchResults.videos[0];
+      const { title, url } = videoInfo;
+
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando video...` }, { edit: waitingMsg.key });
+
+      let videoBuffer;
+
+      // --- Fallback System ---
+      try {
+        const tempFilePath = await downloadWithYtdlp(url, true); // true para video
+        videoBuffer = fs.readFileSync(tempFilePath);
+        fs.unlinkSync(tempFilePath);
+      } catch (e1) {
+        console.error("play2: yt-dlp failed:", e1.message);
+        try {
+          const downloadUrl = await downloadWithDdownr(url, true); // true para video
+          const response = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+          videoBuffer = response.data;
+        } catch (e2) {
+          console.error("play2: ddownr failed:", e2.message);
+          const fallbackApis = [
+            `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}`,
+            `https://mahiru-shiina.vercel.app/download/ytmp4?url=${encodeURIComponent(url)}`,
+            `https://api.agungny.my.id/api/youtube-video?url=${encodeURIComponent(url)}`
+          ];
+          let success = false;
+          for (const apiUrl of fallbackApis) {
+            try {
+              videoBuffer = await downloadWithApi(apiUrl);
+              success = true;
+              break;
+            } catch (e3) {
+              console.error(`API ${apiUrl} failed:`, e3.message);
+            }
+          }
+          if (!success) throw new Error("Todos los métodos de descarga de video han fallado.");
+        }
       }
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `Procesando audio para *${video.title}*...` }, { edit: waitingMsg.key });
+      if (!videoBuffer) throw new Error("El buffer de video está vacío.");
 
-      const apiUrl = 'https://downloader-api-7mul.onrender.com/api/download';
-      const response = await axios.post(
-        apiUrl,
-        { url: video.url },
-        { responseType: 'json', timeout: 120000 }
-      );
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Descarga completada. Enviando video...` }, { edit: waitingMsg.key });
 
-      // Asumiendo la estructura de la respuesta de la API.
-      // Esto podría necesitar ajuste.
-      const downloadUrl = response.data?.video_url || response.data?.url || response.data?.link;
-
-      if (!downloadUrl) {
-        console.error("Respuesta de la API sin URL:", response.data);
-        throw new Error("La API no devolvió una URL de descarga válida.");
-      }
-
-      await sock.sendMessage(
-        msg.key.remoteJid,
-        {
-          audio: { url: downloadUrl },
-          mimetype: 'audio/mpeg'
-        },
-        { quoted: msg }
-      );
+      await sock.sendMessage(msg.key.remoteJid, { video: videoBuffer, mimetype: 'video/mp4', caption: title }, { quoted: msg });
 
     } catch (error) {
-      console.error("Error en el comando play2:", error);
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      console.error("Detalle del error:", errorMessage);
-
-      if (error.code === 'ECONNABORTED') {
-        await sock.sendMessage(msg.key.remoteJid, { text: "El servidor de descargas tardó demasiado en responder." }, { edit: waitingMsg.key, quoted: msg });
+      console.error("Error final en play2:", error);
+      const errorMsg = { text: `❌ ${error.message}` };
+       if (waitingMsg) {
+        await sock.sendMessage(msg.key.remoteJid, { ...errorMsg, edit: waitingMsg.key });
       } else {
-        await sock.sendMessage(msg.key.remoteJid, { text: `Ocurrió un error al procesar la solicitud de audio.`, edit: waitingMsg.key, quoted: msg });
+        await sock.sendMessage(msg.key.remoteJid, errorMsg, { quoted: msg });
       }
     }
   }

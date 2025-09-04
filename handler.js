@@ -1,24 +1,10 @@
 // Este es el manejador de mensajes que usarán los sub-bots y el bot principal.
-import fs from 'fs';
-import path from 'path';
 import { commands, aliases, testCache, cooldowns } from './index.js';
 import config from './config.js';
+import { readSettingsDb, readMaintenanceDb } from './lib/database.js';
 
 const COOLDOWN_SECONDS = 5;
 const RESPONSE_DELAY_MS = 2000;
-
-const dbPath = path.resolve('./database/groupSettings.json');
-
-function readSettingsDb() {
-  try {
-    if (!fs.existsSync(dbPath)) return {};
-    const data = fs.readFileSync(dbPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error("Error leyendo la base de datos de ajustes:", error);
-    return {};
-  }
-}
 
 export async function handler(m, isSubBot = false) { // Se añade isSubBot para diferenciar
   const sock = this;
@@ -77,6 +63,12 @@ export async function handler(m, isSubBot = false) { // Se añade isSubBot para 
       if (cooldowns.has(senderId)) {
         const timeDiff = (Date.now() - cooldowns.get(senderId)) / 1000;
         if (timeDiff < COOLDOWN_SECONDS) return;
+      }
+
+      // Verificación de Mantenimiento
+      const maintenanceList = readMaintenanceDb();
+      if (maintenanceList.includes(commandName) && !isOwner) {
+        return sock.sendMessage(from, { text: "🛠️ Este comando está actualmente en mantenimiento. Por favor, inténtalo más tarde." });
       }
 
       // Ejecución

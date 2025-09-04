@@ -1,50 +1,51 @@
-import axios from 'axios';
+import youtubedl from 'youtube-dl-exec';
 
 const facebookCommand = {
   name: "facebook",
   category: "descargas",
   description: "Descarga un video de Facebook desde un enlace.",
-  aliases: ["fb"],
+  aliases: ["fb", "fbdl"],
 
   async execute({ sock, msg, args }) {
     const url = args[0];
+    const fbRegex = /https?:\/\/(www\.)?(facebook\.com|fb\.watch)\/[^\s]+/i;
 
-    if (!url || !(url.includes('facebook.com') || url.includes('fb.watch'))) {
-      await sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de Facebook." }, { quoted: msg });
-      return;
+    if (!url || !fbRegex.test(url)) {
+      return sock.sendMessage(msg.key.remoteJid, { text: "Por favor, proporciona un enlace válido de Facebook." }, { quoted: msg });
     }
 
-    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `Procesando enlace de Facebook...` }, { quoted: msg });
+    const waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🌊 Procesando tu video...` }, { quoted: msg });
 
     try {
-      const apiUrl = `https://api.dreaded.site/api/facebook?url=${encodeURIComponent(url)}`;
-
-      // Pedimos la respuesta como un buffer de datos binarios
-      const response = await axios.get(apiUrl, {
-        responseType: 'arraybuffer',
-        timeout: 120000
+      // Usa youtube-dl-exec para obtener el enlace de descarga directo
+      const downloadUrl = await youtubedl(url, {
+        getUrl: true,
+        format: 'best[ext=mp4][height<=720]/best[ext=mp4]'
       });
 
-      const videoBuffer = Buffer.from(response.data, 'binary');
-
-      if (!videoBuffer || videoBuffer.length < 1000) { // Chequeo simple de que el buffer no esté vacío
-        throw new Error("La API no devolvió un video válido.");
+      if (!downloadUrl) {
+        throw new Error("No se pudo obtener la URL de descarga del video.");
       }
 
-      await sock.sendMessage(msg.key.remoteJid, {
-        video: videoBuffer,
-        mimetype: 'video/mp4',
-        caption: "Aquí tienes tu video de Facebook."
-      }, { quoted: msg });
+      await sock.sendMessage(
+        msg.key.remoteJid,
+        {
+          video: { url: downloadUrl },
+          caption: `✨ ¡Aquí tienes tu video de Facebook!`,
+          mimetype: 'video/mp4'
+        },
+        { quoted: msg }
+      );
 
-      await sock.sendMessage(msg.key.remoteJid, { text: `✅ Video de Facebook enviado.`, edit: waitingMsg.key });
+      await sock.sendMessage(msg.key.remoteJid, { text: `✅ ¡Video enviado!`, edit: waitingMsg.key });
 
     } catch (error) {
-      console.error("Error en el comando facebook:", error.message);
-      if (error.code === 'ECONNABORTED') {
-        await sock.sendMessage(msg.key.remoteJid, { text: "El servidor de descargas de Facebook tardó demasiado en responder." }, { quoted: msg });
+      console.error("Error en el comando facebook (youtube-dl-exec):", error);
+      const errorMessage = error.stderr || error.message;
+      if (errorMessage.includes('proxy') || errorMessage.includes('HTTP Error 429')) {
+        await sock.sendMessage(msg.key.remoteJid, { text: "El servicio de descarga está sobrecargado o bloqueado. Inténtalo más tarde." }, { edit: waitingMsg.key, quoted: msg });
       } else {
-        await sock.sendMessage(msg.key.remoteJid, { text: "No se pudo descargar el video. El enlace podría ser inválido, privado o la API estar fallando." }, { quoted: msg });
+        await sock.sendMessage(msg.key.remoteJid, { text: `❌ Ocurrió un error. El enlace puede ser inválido, privado o el servicio de descarga estar fallando.`, edit: waitingMsg.key, quoted: msg });
       }
     }
   }
