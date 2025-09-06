@@ -25,6 +25,12 @@ const playCommand = {
       const videoInfo = searchResults.videos[0];
       const { title, url } = videoInfo;
 
+      // Verificar la duración del video
+      const maxDuration = 18000; // 5 horas en segundos
+      if (videoInfo.seconds > maxDuration) {
+        throw new Error(`El video es demasiado largo. La duración máxima es de 5 horas.`);
+      }
+
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando...` }, { edit: waitingMsg.key });
 
       let audioBuffer;
