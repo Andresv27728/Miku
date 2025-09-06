@@ -1,7 +1,7 @@
 import yts from 'yt-search';
 import fs from 'fs';
 import axios from 'axios';
-import { downloadWithYtdlp, downloadWithMaya } from '../lib/downloaders.js';
+import { downloadWithYtdlp, downloadWithDdownr } from '../lib/downloaders.js';
 
 const playCommand = {
   name: "play",
@@ -17,29 +17,13 @@ const playCommand = {
     let waitingMsg;
 
     try {
-      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Procesando: "${query}"...` }, { quoted: msg });
+      waitingMsg = await sock.sendMessage(msg.key.remoteJid, { text: `🎶 Buscando "${query}"...` }, { quoted: msg });
 
-      // Detectar si el query es una URL de YouTube
-      const youtubeUrlRegex = /^(https?:\/\/)?(www\.)?(youtu\.be\/|youtube\.com\/(watch\?v=|embed\/|v\/|shorts\/))([\w-]{11})/;
-      const urlMatch = query.match(youtubeUrlRegex);
+      const searchResults = await yts(query);
+      if (!searchResults.videos.length) throw new Error("No se encontraron resultados para tu búsqueda.");
 
-      let videoInfo;
-      if (urlMatch) {
-        const videoId = urlMatch[5];
-        videoInfo = await yts({ videoId });
-        if (!videoInfo) throw new Error("No se pudo encontrar información para la URL proporcionada.");
-      } else {
-        const searchResults = await yts(query);
-        if (!searchResults.videos.length) throw new Error("No se encontraron resultados para la búsqueda.");
-        videoInfo = searchResults.videos[0];
-      }
+      const videoInfo = searchResults.videos[0];
       const { title, url } = videoInfo;
-
-      // Verificar la duración del video
-      const maxDuration = 18000; // 5 horas en segundos
-      if (videoInfo.seconds > maxDuration) {
-        throw new Error(`El video es demasiado largo. La duración máxima es de 5 horas.`);
-      }
 
       await sock.sendMessage(msg.key.remoteJid, { text: `✅ Encontrado: *${title}*.\n\n⬇️ Descargando...` }, { edit: waitingMsg.key });
 
@@ -47,20 +31,18 @@ const playCommand = {
 
       // --- Sistema de Fallbacks Silencioso ---
       try {
-        // Plan A: Maya API
-        const downloadUrl = await downloadWithMaya(url, false);
-        const response = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
-        audioBuffer = response.data;
+        const tempFilePath = await downloadWithYtdlp(url, false); // false para audio
+        audioBuffer = fs.readFileSync(tempFilePath);
+        fs.unlinkSync(tempFilePath);
       } catch (e1) {
-        console.error("play: Maya API failed:", e1.message);
+        console.error("play: yt-dlp failed:", e1.message);
         try {
-          // Plan B: yt-dlp
-          const tempFilePath = await downloadWithYtdlp(url, false);
-          audioBuffer = fs.readFileSync(tempFilePath);
-          fs.unlinkSync(tempFilePath);
+            const downloadUrl = await downloadWithDdownr(url, false); // false para audio
+            const response = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+            audioBuffer = response.data;
         } catch (e2) {
-          console.error("play: yt-dlp failed:", e2.message);
-          throw new Error("Todos los métodos de descarga han fallado.");
+            console.error("play: ddownr failed:", e2.message);
+            throw new Error("Todos los métodos de descarga han fallado.");
         }
       }
 
