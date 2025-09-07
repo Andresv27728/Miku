@@ -9,7 +9,7 @@ const shutdownCommand = {
       await sock.sendMessage(msg.key.remoteJid, { text: "✅ Apagando el bot..." }, { quoted: msg });
       // Un pequeño retraso para asegurar que el mensaje se envíe antes de apagar.
       setTimeout(() => {
-        process.exit(0);
+        process.exit(1);
       }, 1000);
     } catch (e) {
       console.error("Error en el comando shutdown:", e);
