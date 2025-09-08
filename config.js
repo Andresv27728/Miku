@@ -5,7 +5,7 @@
 
 const config = {
   // El nombre que mostrará el bot en los menús y mensajes.
-  botName: "BOT DE YO SOY YO",
+  botName: "𝕳𝕬𝕿𝕾𝖀𝕹𝕰 𝕸𝕴𝕶𝖀 𝕸𝕴𝕶𝖀",
 
   // El nombre del propietario del bot.
   ownerName: "YO SOY YO",
